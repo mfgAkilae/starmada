@@ -3,19 +3,23 @@
  *
  * The proxy forwards the exports of the original Strlkup.dll (renamed to
  * Strlkup_orig.dll; linker pragmas below keep the original ordinals) and patches
- * three imports of Armada.exe when it loads:
+ * four imports of Armada.exe when it loads:
  *
  *   SetSystemCursor  Armada shows its mouse cursors by replacing the system-wide
  *                    arrow cursor (SetSystemCursor(hcur, OCR_NORMAL)). In a window
  *                    that changes the arrow of the whole desktop, and after a crash
  *                    or a forced exit it stays until the next logon. The replacement
  *                    sets the cursor as the class cursor of the game's own windows.
+ *   SetCursorPos     The game moves the mouse only while its window is in the foreground.
  *   RegisterClassA   The game window ("Armada") ends the process on WM_CLOSE instead of
  *                    running on without a window (title bar X, Alt+F4).
  *   LoadLibraryA     Once the GOG DirectX wrapper (ddraw.dll) is loaded, its
  *                    session-wide shared memory name is replaced in memory by a name
  *                    unique to this process (isolate_ddraw_mapping), so other games
- *                    that use the same wrapper cannot crash it.
+ *                    that use the same wrapper cannot crash it, and its SetCursorPos
+ *                    and ClipCursor imports get the same foreground guard
+ *                    (guard_ddraw_mouse). Wrapper focus calls cannot reactivate a
+ *                    background game and bypass the mouse guard.
  *
  * For the GOG 1.2 Armada.exe (checked by code signature) it also redirects the
  * ST3D light destructors so that a destroyed light leaves the render engine's
@@ -26,6 +30,7 @@
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <intrin.h>
 
 #ifndef OCR_NORMAL
 #define OCR_NORMAL 32512
@@ -182,11 +187,14 @@ static void isolate_ddraw_mapping(void)
     }
 }
 
+static void guard_ddraw_mouse(void);
+
 static HMODULE WINAPI local_LoadLibraryA(LPCSTR name)
 {
     HMODULE h = LoadLibraryA(name);
     EnterCriticalSection(&g_lock);
     isolate_ddraw_mapping();
+    guard_ddraw_mouse();
     LeaveCriticalSection(&g_lock);
     return h;
 }
@@ -200,6 +208,7 @@ static HMODULE WINAPI local_LoadLibraryA(LPCSTR name)
  * multiplayer game the other players see this player leave, as after a disconnect.
  */
 static WNDPROC g_game_wndproc;
+static void release_clip(void);
 
 static LRESULT CALLBACK game_wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
@@ -207,7 +216,207 @@ static LRESULT CALLBACK game_wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         TerminateProcess(GetCurrentProcess(), 0);
         return 0;
     }
+    if ((msg == WM_ACTIVATE && LOWORD(wp) == WA_INACTIVE) || (msg == WM_ACTIVATEAPP && !wp))
+        release_clip();
     return CallWindowProcA(g_game_wndproc, hwnd, msg, wp, lp);
+}
+
+/*
+ * Mouse: the game and the GOG DirectX wrapper both move or confine the mouse.
+ *  - In a match the game reads the mouse relatively. While its "active" flag (set from
+ *    WM_ACTIVATE) is on and the cursor is inside the client area, every input poll puts
+ *    the cursor back to the window centre with SetCursorPos (0x477541). The wrapper hooks
+ *    that import to scale the coordinates and then calls SetCursorPos itself.
+ *  - The wrapper emulates exclusive fullscreen: when the game sets its display mode, and
+ *    on several window events, it confines the cursor to the game's client area with
+ *    ClipCursor. The clip is global. A game window in the background (a second instance,
+ *    or a game started while the user works elsewhere) held the user's mouse in it.
+ * The replacements below sit in the imports of Armada.exe and of ddraw.dll. They move or
+ * confine the cursor only while a window of this process is the foreground window, and
+ * release a clip of this process when the game window is deactivated. The test build
+ * never moves, confines or activates anything (test instances run in the background).
+ * The real functions are called through pointers from GetProcAddress, because the wrapper
+ * may also hook the imports of this DLL.
+ */
+typedef BOOL (WINAPI *setcursorpos_fn)(int, int);
+typedef BOOL (WINAPI *clipcursor_fn)(const RECT *);
+typedef BOOL (WINAPI *foreground_fn)(HWND);
+typedef HWND (WINAPI *focus_fn)(HWND);
+static setcursorpos_fn g_real_SetCursorPos;
+static clipcursor_fn g_real_ClipCursor;
+static foreground_fn g_real_SetForegroundWindow;
+static focus_fn g_real_SetFocus;
+static volatile LONG g_clipped;
+static BOOL g_ddraw_mouse_done;
+
+static BOOL game_in_front(void)
+{
+    DWORD pid = 0;
+    HWND fg = GetForegroundWindow();
+    if (fg)
+        GetWindowThreadProcessId(fg, &pid);
+    return pid == GetCurrentProcessId();
+}
+
+static BOOL WINAPI local_SetCursorPos(int x, int y)
+{
+#ifdef ARMADA_TESTHOOKS
+    (void)x; (void)y;
+    return TRUE;
+#else
+    if (!game_in_front())
+        return TRUE;
+    return g_real_SetCursorPos(x, y);
+#endif
+}
+
+static BOOL WINAPI local_ClipCursor(const RECT *r)
+{
+#ifdef ARMADA_TESTHOOKS
+    (void)r;
+    return TRUE;
+#else
+    if (!r) {
+        /* release only a clip of this process; a clip of another program stays */
+        if (InterlockedExchange(&g_clipped, 0))
+            return g_real_ClipCursor(NULL);
+        return TRUE;
+    }
+    if (!game_in_front())
+        return TRUE;
+    InterlockedExchange(&g_clipped, 1);
+    return g_real_ClipCursor(r);
+#endif
+}
+
+static void release_clip(void)
+{
+    if (InterlockedExchange(&g_clipped, 0))
+        g_real_ClipCursor(NULL);
+}
+
+/* A wrapper display change must not reactivate a background game and thereby
+   make the foreground-only cursor guard permit movement/confinement again. */
+static BOOL WINAPI local_SetForegroundWindow(HWND hwnd)
+{
+#ifdef ARMADA_TESTHOOKS
+    (void)hwnd;
+    return TRUE;
+#else
+    if (!game_in_front())
+        return TRUE;
+    return g_real_SetForegroundWindow(hwnd);
+#endif
+}
+
+static HWND WINAPI local_SetFocus(HWND hwnd)
+{
+#ifdef ARMADA_TESTHOOKS
+    (void)hwnd;
+    return NULL;
+#else
+    if (!game_in_front())
+        return NULL;
+    return g_real_SetFocus(hwnd);
+#endif
+}
+
+#ifdef ARMADA_TESTHOOKS
+/*
+ * Test instances stay in the background: they never activate a window or take the
+ * focus, so the user's keyboard and mouse stay with the user's programs. Windows are
+ * shown without activation and without changing the Z order. The test bed drives the
+ * games with posted messages, which need no focus. Real calls go through pointers from
+ * GetProcAddress (the wrapper may hook the imports of this DLL).
+ */
+typedef BOOL (WINAPI *showwindow_fn)(HWND, int);
+typedef BOOL (WINAPI *setwindowpos_fn)(HWND, HWND, int, int, int, int, UINT);
+typedef HWND (WINAPI *createwindowexa_fn)(DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
+typedef HWND (WINAPI *createwindowexw_fn)(DWORD, LPCWSTR, LPCWSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
+static showwindow_fn g_real_ShowWindow;
+static setwindowpos_fn g_real_SetWindowPos;
+static createwindowexa_fn g_real_CreateWindowExA;
+static createwindowexw_fn g_real_CreateWindowExW;
+
+static int no_activate(int cmd)
+{
+    switch (cmd) {
+    case SW_SHOWNORMAL: case SW_SHOWMAXIMIZED: case SW_RESTORE: case SW_SHOWDEFAULT:
+        return SW_SHOWNOACTIVATE;
+    case SW_SHOW:
+        return SW_SHOWNA;
+    case SW_SHOWMINIMIZED:
+        return SW_SHOWMINNOACTIVE;
+    }
+    return cmd;
+}
+
+static BOOL WINAPI local_ShowWindow(HWND hwnd, int cmd)
+{
+    return g_real_ShowWindow(hwnd, no_activate(cmd));
+}
+
+static BOOL WINAPI local_SetWindowPos(HWND hwnd, HWND after, int x, int y, int cx, int cy, UINT flags)
+{
+    if (flags & SWP_SHOWWINDOW)
+        flags |= SWP_NOACTIVATE;
+    return g_real_SetWindowPos(hwnd, after, x, y, cx, cy, flags | SWP_NOACTIVATE | SWP_NOZORDER);
+}
+
+/* a visible top-level window is created hidden and then shown without activation */
+static HWND WINAPI local_CreateWindowExA(DWORD ex, LPCSTR cls, LPCSTR title, DWORD style, int x, int y,
+                                         int w, int h, HWND parent, HMENU menu, HINSTANCE inst, LPVOID param)
+{
+    BOOL show = (style & WS_VISIBLE) && !(style & WS_CHILD);
+    HWND r = g_real_CreateWindowExA(ex, cls, title, show ? style & ~WS_VISIBLE : style, x, y, w, h,
+                                    parent, menu, inst, param);
+    if (r && show)
+        g_real_ShowWindow(r, SW_SHOWNOACTIVATE);
+    return r;
+}
+
+static HWND WINAPI local_CreateWindowExW(DWORD ex, LPCWSTR cls, LPCWSTR title, DWORD style, int x, int y,
+                                         int w, int h, HWND parent, HMENU menu, HINSTANCE inst, LPVOID param)
+{
+    BOOL show = (style & WS_VISIBLE) && !(style & WS_CHILD);
+    HWND r = g_real_CreateWindowExW(ex, cls, title, show ? style & ~WS_VISIBLE : style, x, y, w, h,
+                                    parent, menu, inst, param);
+    if (r && show)
+        g_real_ShowWindow(r, SW_SHOWNOACTIVATE);
+    return r;
+}
+
+static void stay_in_background(HMODULE m)
+{
+    HMODULE user32 = GetModuleHandleA("user32.dll");
+    g_real_ShowWindow = (showwindow_fn)GetProcAddress(user32, "ShowWindow");
+    g_real_SetWindowPos = (setwindowpos_fn)GetProcAddress(user32, "SetWindowPos");
+    g_real_CreateWindowExA = (createwindowexa_fn)GetProcAddress(user32, "CreateWindowExA");
+    g_real_CreateWindowExW = (createwindowexw_fn)GetProcAddress(user32, "CreateWindowExW");
+    patch_import(m, "USER32.dll", "ShowWindow", (void *)local_ShowWindow);
+    patch_import(m, "USER32.dll", "SetWindowPos", (void *)local_SetWindowPos);
+    patch_import(m, "USER32.dll", "SetForegroundWindow", (void *)local_SetForegroundWindow);
+    patch_import(m, "USER32.dll", "SetFocus", (void *)local_SetFocus);
+    patch_import(m, "USER32.dll", "CreateWindowExA", (void *)local_CreateWindowExA);
+    patch_import(m, "USER32.dll", "CreateWindowExW", (void *)local_CreateWindowExW);
+}
+#endif
+
+/* Once ddraw.dll is loaded: replace its mouse imports (it calls them for itself and from
+   its hooks of the game's imports). */
+static void guard_ddraw_mouse(void)
+{
+    HMODULE dd;
+    if (g_ddraw_mouse_done || (dd = GetModuleHandleA("ddraw.dll")) == NULL)
+        return;
+    g_ddraw_mouse_done = TRUE;
+    patch_import(dd, "USER32.dll", "SetCursorPos", (void *)local_SetCursorPos);
+    patch_import(dd, "USER32.dll", "ClipCursor", (void *)local_ClipCursor);
+    patch_import(dd, "USER32.dll", "SetForegroundWindow", (void *)local_SetForegroundWindow);
+    patch_import(dd, "USER32.dll", "SetFocus", (void *)local_SetFocus);
+#ifdef ARMADA_TESTHOOKS
+    stay_in_background(dd);
+#endif
 }
 
 static ATOM WINAPI local_RegisterClassA(const WNDCLASSA *wc)
@@ -333,6 +542,9 @@ static void install_light_fix(void)
  *   ARMADA_TEST_DUMP_DIR    folder for the dumps (default Logs)
  *   ARMADA_TEST_EXIT_AFTER  terminate the process after N simulation steps
  *   ARMADA_TEST_MULTI       1: allow a second instance (FindWindowA("Armada") returns NULL)
+ *   ARMADA_TEST_INJECT_STEP/_ORDER/_REPEAT  give every ship an order (CommandAllShips) at that
+ *                           simulation step and then every _REPEAT steps
+ *   ARMADA_TEST_NO_LIGHTFIX 1: leave the light destructors unpatched
  * The dump uses the game's own sync dump writers (objects 0x46f190, weapons 0x50bb20,
  * ordnance 0x4edde0) and the generator states; it consumes no random numbers.
  */
@@ -350,6 +562,7 @@ static char g_dump_dir[MAX_PATH] = "Logs";
    stub "inc [counter]; jmp <original target>", so the dumps show whether the path ran. */
 static const DWORD g_dock_sites[3] = { 0x42a540, 0x42b76e, 0x430296 };
 static volatile LONG g_dock_count[3];
+static volatile LONG g_o8_count;      /* order 8 handler: target gone, patched return taken */
 
 static void install_dock_counters(void)
 {
@@ -377,6 +590,29 @@ static void install_dock_counters(void)
     }
 }
 
+/* Patched exe only: "jmp 0x42b034" at 0x42afe7 goes through the padding at 0x42b037
+   (inc [g_o8_count]; jmp 0x42b034), so the dumps show how often the fix was needed. */
+static void install_o8_counter(void)
+{
+    BYTE *site = (BYTE *)0x42afe7, *cave = (BYTE *)0x42b037;
+    DWORD prot;
+    int i;
+    if (site[0] != 0xEB || site[1] != 0x4B || cave[-3] != 0x5F || cave[-2] != 0x5E || cave[-1] != 0xC3)
+        return;
+    for (i = 0; i < 9; i++)
+        if (cave[i] != 0x90)
+            return;
+    if (!VirtualProtect(site, 0x60, PAGE_EXECUTE_READWRITE, &prot))
+        return;
+    cave[0] = 0xFF;                                     /* inc dword ptr [g_o8_count] */
+    cave[1] = 0x05;
+    *(DWORD *)(cave + 2) = (DWORD)&g_o8_count;
+    cave[6] = 0xEB;                                     /* jmp 0x42b034 */
+    cave[7] = 0xF5;
+    site[1] = 0x4E;                                     /* jmp 0x42b037 */
+    VirtualProtect(site, 0x60, prot, &prot);
+}
+
 static unsigned env_uint(const char *name)
 {
     char buf[32];
@@ -393,20 +629,24 @@ static void dump_state(unsigned step)
     fopen_fn f_open = (fopen_fn)GetProcAddress(crt, "fopen");
     fclose_fn f_close = (fclose_fn)GetProcAddress(crt, "fclose");
     fprintf_fn f_printf = (fprintf_fn)GetProcAddress(crt, "fprintf");
-    char path[MAX_PATH + 32];
+    char path[MAX_PATH + 32], pending[MAX_PATH + 40];
     void *f;
     if (!f_open || !f_close || !f_printf)
         return;
     wsprintfA(path, "%s\\step_%06u.txt", g_dump_dir, step);
-    if ((f = f_open(path, "w")) == NULL)
+    wsprintfA(pending, "%s.tmp", path);
+    if ((f = f_open(pending, "w")) == NULL)
         return;
     f_printf(f, "step %u synced_rng %08lx table_index %lu\n", step,
              *(DWORD *)0x67dc98, *(DWORD *)0x67dc9c);
-    f_printf(f, "docking_angle_draws %ld %ld %ld\n", g_dock_count[0], g_dock_count[1], g_dock_count[2]);
+    f_printf(f, "docking_angle_draws %ld %ld %ld order8_lost_target %ld local_rng %08lx\n", g_dock_count[0],
+             g_dock_count[1], g_dock_count[2], g_o8_count, *(DWORD *)0x67dca4);
     ((dump_fn)0x46f190)(f);
     ((dump_fn)0x50bb20)(f);
     ((dump_fn)0x4edde0)(f);
-    f_close(f);
+    f_printf(f, "END step %u\n", step);
+    if (f_close(f) == 0)
+        MoveFileExA(pending, path, MOVEFILE_REPLACE_EXISTING);
 }
 
 static void log_line(const char *fmt, ...)
@@ -442,6 +682,54 @@ static void log_stack(const char *what, DWORD ebp)
     log_line("%s", line);
 }
 
+/*
+ * Test instances never become the active window: a thread-local CBT hook refuses every
+ * activation of a window of the game thread and logs who asked for it (return addresses
+ * on the stack that follow a call instruction, as module+offset).
+ */
+static HHOOK g_cbt;
+
+static BOOL after_call(const BYTE *r)
+{
+    if (IsBadReadPtr(r - 6, 6))
+        return FALSE;
+    return r[-5] == 0xE8 || (r[-6] == 0xFF && (r[-5] == 0x15 || (r[-5] & 0xF8) == 0x90)) ||
+           (r[-2] == 0xFF && (r[-1] & 0xF8) == 0xD0) || (r[-3] == 0xFF && (r[-2] & 0xF8) == 0x50);
+}
+
+static void log_callers(const char *what)
+{
+    char line[560], name[MAX_PATH];
+    DWORD *sp = (DWORD *)&what, *top = (DWORD *)__readfsdword(4);
+    int len = wsprintfA(line, "%s:", what), found = 0;
+    for (; sp < top && found < 14 && len < 480; sp++) {
+        HMODULE m;
+        const BYTE *r = (const BYTE *)*sp;
+        if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                (LPCSTR)r, &m) || !after_call(r))
+            continue;
+        if (!GetModuleFileNameA(m, name, sizeof(name)))
+            continue;
+        len += wsprintfA(line + len, " %s+%lx", lstrlenA(name) > 0 ? name + lstrlenA(name) - (lstrlenA(name) > 12 ? 12 : lstrlenA(name)) : "?",
+                         (DWORD)(r - (const BYTE *)m));
+        found++;
+    }
+    log_line("%s", line);
+}
+
+static LRESULT CALLBACK cbt_proc(int code, WPARAM wp, LPARAM lp)
+{
+    if (code == HCBT_ACTIVATE) {
+        char cls[64], what[128];
+        cls[0] = 0;
+        GetClassNameA((HWND)wp, cls, sizeof(cls));
+        wsprintfA(what, "activation refused (window %08lx class %s)", (DWORD)wp, cls);
+        log_callers(what);
+        return 1;
+    }
+    return CallNextHookEx(g_cbt, code, wp, lp);
+}
+
 typedef void (__cdecl *purecall_fn)(void);
 static purecall_fn g_purecall;
 
@@ -456,10 +744,22 @@ static void __cdecl local_purecall(void)
         g_purecall();
 }
 
+/* ARMADA_TEST_INJECT_STEP / ARMADA_TEST_INJECT_ORDER: after that simulation step, give every
+   ship the order through the mission API CommandAllShips (0x436cb0, exported
+   ?CommandAllShips@@YAXW4AiCommand@@HPBD_N2@Z), on every node at the same step, as a mission
+   script would. Order 23 sends ships to the nearest shipyard (CraftProcess slot 23). */
+typedef void (__cdecl *cmdall_fn)(int order, int player, const char *cls, int armed_only, int skip_flag);
+static unsigned g_inject_step, g_inject_order, g_inject_repeat;
+
 static void __stdcall hooked_step(int ms)
 {
     g_step(ms);
     g_steps++;
+    if (g_inject_step && g_steps >= g_inject_step &&
+        (g_steps == g_inject_step || (g_inject_repeat && (g_steps - g_inject_step) % g_inject_repeat == 0))) {
+        ((cmdall_fn)0x436cb0)((int)g_inject_order, -1, NULL, 0, 0);
+        log_line("step %u: CommandAllShips(%u) injected", g_steps, g_inject_order);
+    }
     if (g_dump_every && g_steps % g_dump_every == 0)
         dump_state(g_steps);
     if (g_exit_after && g_steps >= g_exit_after)
@@ -482,12 +782,18 @@ static void install_test_hooks(HMODULE exe)
     int i;
 
     g_dump_every = env_uint("ARMADA_TEST_DUMP_EVERY");
+    g_inject_step = env_uint("ARMADA_TEST_INJECT_STEP");
+    g_inject_order = env_uint("ARMADA_TEST_INJECT_ORDER");
+    g_inject_repeat = env_uint("ARMADA_TEST_INJECT_REPEAT");
     g_exit_after = env_uint("ARMADA_TEST_EXIT_AFTER");
     if (GetEnvironmentVariableA("ARMADA_TEST_DUMP_DIR", dir, sizeof(dir)) > 0)
         lstrcpynA(g_dump_dir, dir, sizeof(g_dump_dir));
     if (env_uint("ARMADA_TEST_MULTI") == 1)
         patch_import(exe, "USER32.dll", "FindWindowA", (void *)local_FindWindowA);
+    stay_in_background(exe);
+    g_cbt = SetWindowsHookExA(WH_CBT, cbt_proc, NULL, GetCurrentThreadId());
     install_dock_counters();
+    install_o8_counter();
     g_purecall = (purecall_fn)GetProcAddress(GetModuleHandleA("msvcrt.dll"), "_purecall");
     patch_import(exe, "MSVCRT.dll", "_purecall", (void *)local_purecall);
     for (i = 0; i < 5; i++)
@@ -515,11 +821,17 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     (void)reserved;
     if (reason == DLL_PROCESS_ATTACH) {
         HMODULE exe = GetModuleHandleA(NULL);
+        HMODULE user32 = GetModuleHandleA("user32.dll");
         DisableThreadLibraryCalls(inst);
+        g_real_SetCursorPos = (setcursorpos_fn)GetProcAddress(user32, "SetCursorPos");
+        g_real_ClipCursor = (clipcursor_fn)GetProcAddress(user32, "ClipCursor");
+        g_real_SetForegroundWindow = (foreground_fn)GetProcAddress(user32, "SetForegroundWindow");
+        g_real_SetFocus = (focus_fn)GetProcAddress(user32, "SetFocus");
         InitializeCriticalSection(&g_lock);
         patch_import(exe, "USER32.dll", "SetSystemCursor", (void *)local_SetSystemCursor);
         patch_import(exe, "KERNEL32.dll", "LoadLibraryA", (void *)local_LoadLibraryA);
         patch_import(exe, "USER32.dll", "RegisterClassA", (void *)local_RegisterClassA);
+        patch_import(exe, "USER32.dll", "SetCursorPos", (void *)local_SetCursorPos);
         g_main_thread = GetCurrentThreadId();
 #ifdef ARMADA_TESTHOOKS
         install_test_hooks(exe);
@@ -531,4 +843,4 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
 }
 
 /* Marker export so the installer can recognise this proxy. */
-__declspec(dllexport) const char ArmadaCursorFix[] = "ArmadaCursorFix 1.2 (cursor, ddraw mapping isolation, light lifetime, window close)";
+__declspec(dllexport) const char ArmadaCursorFix[] = "ArmadaCursorFix 1.2.0 (cursor, ddraw mapping isolation, light lifetime, window close, mouse and focus guards)";

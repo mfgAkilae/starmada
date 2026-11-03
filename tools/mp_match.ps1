@@ -1,16 +1,19 @@
-param([string]$Run = 'mp2', [int]$DumpEvery = 50, [int]$AiSlots = 2)
+param([string]$Run = 'mp2', [int]$DumpEvery = 50, [int]$AiSlots = 2, [int]$ExitAfter = 0,
+      [int]$InjectStep = 0, [int]$InjectOrder = 0, [int]$InjectRepeat = 0)
 # Two-instance multiplayer test bed on one PC (test proxy from "src\strlkup_proxy\build.cmd test"
 # installed as Strlkup.dll, dxcfg display=application). Instance A hosts a TCP/IP LAN game,
 # instance B joins, A adds Hard AI players and both launch. The menus are driven with
 # PostMessage (clk.py) and press-drag-release for the drop-down lists (drag.py).
+# The instances start without activation (start_bg.py) and the test proxy keeps them in the
+# background; run tools\mouse_watchdog.py alongside to stop them if one takes the mouse or focus.
 $py = 'E:\dev\starmada\.venv\Scripts\python.exe'
 $t = 'E:\dev\starmada\tools'
-& "$t\mp_inst.ps1" -Tag A -Run $Run -DumpEvery $DumpEvery; Start-Sleep -Seconds 10
+& "$t\mp_inst.ps1" -Tag A -Run $Run -DumpEvery $DumpEvery -ExitAfter $ExitAfter -InjectStep $InjectStep -InjectOrder $InjectOrder -InjectRepeat $InjectRepeat; Start-Sleep -Seconds 10
 & $py "$t\clk.py" A 555 20;  Start-Sleep -Seconds 8      # Multiplayer
 & $py "$t\clk.py" A 319 310; Start-Sleep -Seconds 6      # Local Area Network (TCP/IP)
 & $py "$t\clk.py" A 292 215; Start-Sleep -Seconds 4      # Create Game
 & $py "$t\clk.py" A 78 167;  Start-Sleep -Seconds 6      # OK (game name dialog)
-& "$t\mp_inst.ps1" -Tag B -Run $Run -DumpEvery $DumpEvery; Start-Sleep -Seconds 10
+& "$t\mp_inst.ps1" -Tag B -Run $Run -DumpEvery $DumpEvery -ExitAfter $ExitAfter -InjectStep $InjectStep -InjectOrder $InjectOrder -InjectRepeat $InjectRepeat; Start-Sleep -Seconds 10
 & $py "$t\clk.py" B 555 20;  Start-Sleep -Seconds 8
 & $py "$t\clk.py" B 319 310; Start-Sleep -Seconds 25     # session list fills
 & $py "$t\clk.py" B 97 76;   Start-Sleep -Seconds 2      # select the first game

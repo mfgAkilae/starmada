@@ -1,40 +1,67 @@
-"""cmpdumps.py <dirA> <dirB> [--state FILE]: compare the state dumps of two nodes step by step.
+"""Compare node dumps; exit 1 on divergence, 2 on insufficient evidence.
 
-Ignores the per-node presentation fields (isVisible/seen). Prints the first differing lines.
-With --state, steps already found equal in an earlier call are skipped.
+Only per-node presentation fields (isVisible/seen, local_rng) are ignored.
+--state writes the verified filenames for existing watchers; it never trusts an
+old filename cache. --min-step/--min-pairs make final run acceptance explicit.
 """
-import os
+import argparse
+from itertools import zip_longest
+from pathlib import Path
 import re
 import sys
 
-args = [a for a in sys.argv[1:] if not a.startswith('--')]
-a, b = args[0], args[1]
-state = sys.argv[sys.argv.index('--state') + 1] if '--state' in sys.argv else None
-LOCAL = re.compile(r'isVisible \S+ seen \S+')
-done = set()
-if state and os.path.exists(state):
-    done = set(open(state).read().split())
-steps = sorted(s for s in set(os.listdir(a)) & set(os.listdir(b)) if s.startswith('step_'))
-first = None
-newly = []
-for s in steps:
-    if s in done:
-        continue
-    la = [LOCAL.sub('', l) for l in open(os.path.join(a, s), errors='replace')]
-    lb = [LOCAL.sub('', l) for l in open(os.path.join(b, s), errors='replace')]
-    if la == lb:
-        newly.append(s)
-        continue
-    diff = [(i, x, y) for i, (x, y) in enumerate(zip(la, lb)) if x != y]
-    print(f'{s}: {len(la)} vs {len(lb)} lines, {len(diff)} differ')
-    if first is None:
+LOCAL = re.compile(r'isVisible \S+ seen \S+| local_rng \S+')
+STEP = re.compile(r'step_(\d+)\.txt$')
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('a', type=Path)
+    p.add_argument('b', type=Path)
+    p.add_argument('--state', type=Path)
+    p.add_argument('--min-step', type=int, default=0)
+    p.add_argument('--min-pairs', type=int, default=1)
+    p.add_argument('--legacy', action='store_true', help='accept old dumps without an END marker')
+    args = p.parse_args(argv)
+    steps = sorted({s.name for s in args.a.glob('step_*.txt')} &
+                   {s.name for s in args.b.glob('step_*.txt')})
+    equal, first, last_step = [], None, 0
+    for s in steps:
+        match = STEP.fullmatch(s)
+        if not match:
+            continue
+        la = [LOCAL.sub('', l) for l in (args.a / s).read_text(encoding='latin1').splitlines()]
+        lb = [LOCAL.sub('', l) for l in (args.b / s).read_text(encoding='latin1').splitlines()]
+        expected = int(match[1])
+        # A nonempty header and content prevent an empty/truncated file from passing.
+        if any(len(lines) < 3 or not lines[0].startswith(f'step {expected} synced_rng ')
+               for lines in (la, lb)):
+            print(f'{s}: incomplete or invalid dump')
+            return 2
+        if not args.legacy and any(lines[-1] != f'END step {expected}' for lines in (la, lb)):
+            print(f'{s}: missing END marker (old captures require --legacy)')
+            return 2
+        if la == lb:
+            equal.append(s)
+            last_step = max(last_step, expected)
+            continue
         first = s
+        diff = [(i, x, y) for i, (x, y) in enumerate(zip_longest(la, lb, fillvalue='<missing>')) if x != y]
+        print(f'{s}: {len(la)} vs {len(lb)} lines, {len(diff)} differ')
         for i, x, y in diff[:12]:
-            ctx = next((la[j] for j in range(i, -1, -1) if la[j].startswith(('GAMEOBJECT', 'WEAPON', 'ORDNANCE'))), '')
-            print(f'   line {i} [{ctx.strip()[:60]}]\n     A: {x.rstrip()[:110]}\n     B: {y.rstrip()[:110]}')
+            print(f'   line {i + 1}\n     A: {x[:110]}\n     B: {y[:110]}')
         break
-if state:
-    with open(state, 'a') as fh:
-        for s in newly:
-            fh.write(s + '\n')
-print('compared', len(steps), 'steps; first difference:', first)
+    if args.state:
+        args.state.write_text(''.join(s + '\n' for s in equal))
+    print('compared', len(equal) + int(first is not None), 'steps; first difference:', first)
+    if first:
+        return 1
+    if len(equal) < args.min_pairs or not equal or last_step < args.min_step:
+        print(f'insufficient evidence: {len(equal)} pairs, last step {last_step}; '
+              f'require {max(1, args.min_pairs)} pairs and step {args.min_step}')
+        return 2
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
