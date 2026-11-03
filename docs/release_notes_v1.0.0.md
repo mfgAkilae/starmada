@@ -10,7 +10,9 @@ First release. For the GOG version of *Star Trek: Armada* (Armada.exe 1.2,
    (Or drag `Armada.exe` onto `Armada_MP_fix.exe`.)
 3. Done. Backups `<file>.armadafix-backup` are created automatically.
 4. **Every player in your game needs the fix.** Compare the SHA-256 of `Armada.exe` that the
-   tool prints; the main menu shows `v1.2s` instead of `v1.2`.
+   tool prints; the main menu shows `v1.2s` instead of `v1.2`. For the GOG installation the
+   patched `Armada.exe` has the SHA-256
+   `0d8fa21add19801926ebc95752b591a820990bbad4f0b7fb49bf8e4a0d05e76e`.
 
 With Python 3.8+ you can run `armada_fix.py` instead (`apply`, `status`, `restore`).
 

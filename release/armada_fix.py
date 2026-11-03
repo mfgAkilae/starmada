@@ -45,6 +45,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 EXE_BUILDS = {
     '1c37ee8e4a24380c950a91ce5a7f9f96c4fcf3d8ffc0cc7e58faec3835350be6': 'GOG 1.2 RDNA fix, unpatched',
+    '0d8fa21add19801926ebc95752b591a820990bbad4f0b7fb49bf8e4a0d05e76e': 'GOG 1.2 RDNA fix + armada_fix 1.0.0',
 }
 
 # ---------------------------------------------------------------------------------------
