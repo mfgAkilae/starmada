@@ -1,5 +1,15 @@
-# Installer and binaries (GitHub limit 100 MB)
+# game files and anything derived from the copyrighted game are not part of this repository
 *.exe
+*.dll
+*.pyc
 
 # graft index
 graft/
+
+# extracted/installed game data, test copies and release output (large, copyrighted)
+work/
+# local Python environment for the analysis tools
+.venv/
+# proxy build output (release/armada_fix.py embeds the built DLL)
+src/strlkup_proxy/build/
+__pycache__/
