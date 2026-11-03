@@ -10,7 +10,8 @@ For the GOG version of *Star Trek: Armada* (Armada.exe 1.2,
   every PC, so every player crashes in the same step. The handler now returns instead, as it
   already does for a missing target on its other branch. Found in the two-instance test bed
   when every ship was sent to a shipyard: both instances crashed at the same step
-  (`Armada.exe+0x2affa`).
+  (`Armada.exe+0x2affa`). Verified in a test match that gives order 8 to every ship (mp9):
+  the fixed path ran 116,000 times on each node, no crash, no difference between the nodes.
 - **The mouse was caught in the game window, also when the window was in the background.**
   GOG's DirectX wrapper confines the cursor to the game window to emulate fullscreen
   (`ClipCursor`). During a match the game also puts the cursor back to the window centre. Both

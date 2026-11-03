@@ -175,7 +175,10 @@ order 23 → slot 23, order 24 → slot 27. Earlier notes incorrectly called the
 Tested: `tools/test_order8.py` replays the handler's real instructions (original and patched
 exe) in an emulator with a vanished target. Original: access violation at `0x42affa`, the
 address of the mp5 crash. Patched: the handler returns without giving the ship a new order.
-With the ship hit within the last second both versions return the same way.
+With the ship hit within the last second both versions return the same way. In the test bed
+(run mp9) order 8 was given to every ship without a target: the patched return was taken
+116,000 times on each node, with no crash and no difference between the nodes. In the
+original the first of these would end the match.
 
 ## Finding 9 – the mouse is held in the game window (fixed, v1.2.0)
 
@@ -364,10 +367,11 @@ both instances on one AMD Ryzen 9 9950X3D):
 | mp6 | v1.2.0 | 26,300 | 525 | 0 | as mp5; 20 docking draws (synchronized generator), no crash; stopped by hand |
 | mp7 | v1.2.0 | 17,050 | 341 | 0 | 21 docking draws on each node; the old watchdog stopped both instances on a desktop work-area clip, not a proven game clip |
 | mp8 | v1.2.0 | 40,000 | 800 | 0 | order 23 from step 8,000 every 4,000 steps; 40 synchronized docking draws per node, no crash; both instances reached the configured exit step |
+| mp9 | v1.2.0 | 14,000 | 280 | 0 | order 8 for all ships from step 4,000 every 2,000 steps: the fixed return of finding 8 was taken 116,000 times on each node, no crash |
 
 Up to 381 objects, damaged ships and torpedoes in flight were in the dumps. The AI never sent
 a ship to a shipyard in mp1–mp4 (mp4: 0 draws). From v1.2.0 the test bed injects order 23
-(mp5–mp7), so the docking path of finding 1 runs on both nodes. What the runs show: no other
+(mp5–mp8), so the docking path of finding 1 runs on both nodes. What the runs show: no other
 cause of divergence in AI combat on one CPU, no regression from the patch, and with the patch
 the docking draws come from the synchronized generator. Every run uses its own session seed,
 so mp5 and mp6 are different matches.
