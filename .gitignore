@@ -1,0 +1,5 @@
+# Installer and binaries (GitHub limit 100 MB)
+*.exe
+
+# graft index
+graft/
