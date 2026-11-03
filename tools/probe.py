@@ -239,5 +239,7 @@ if __name__ == '__main__' and sys.argv[1] == 'where':
         k32.ReadProcessMemory(hp, ctypes.c_void_p(ctx.Esp), stack, 256, ctypes.byref(n))
         k32.ResumeThread(h)
         k32.CloseHandle(h)
-        rets = [name(v) for v in stack if any(b <= v < b + s for b, s, nn in mods if nn.lower() in ('armada.exe', 'ddraw.dll'))][:8]
+        allmods = len(sys.argv) > 3 and sys.argv[3] == 'all'
+        rets = [name(v) for v in stack if any(b <= v < b + s for b, s, nn in mods
+                if allmods or nn.lower() in ('armada.exe', 'ddraw.dll'))][:14]
         print(tid, 'eip', name(ctx.Eip), '| stack', ' '.join(rets))

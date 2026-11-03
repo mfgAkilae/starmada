@@ -20,6 +20,8 @@ No game files are included. You need your own copy of the game.
 | "out of sync" in multiplayer, fights with torpedoes | The torpedo renderer clears a torpedo's target when the shooter is hidden by the local fog of war; the simulation uses that target | The renderer no longer changes the target |
 | Crash without a message at start when the `Logs` folder is missing or read-only | A debugger break (`int3`) after the failed `fopen` | The game starts without file logging |
 | Crash in `ddraw.dll` when another game with the GOG DirectX wrapper runs (e.g. Armada II) | The wrapper shares its Direct3D device pointer through a session-wide shared memory name and reads the other game's pointer | The name is unique to the game and, at run time, to the process |
+| Crash "pure virtual function call" during a match (v1.1.0) | The loading screen leaves hundreds of references to its deleted light in the render engine's light list; the engine then calls and writes into the dead object | A destroyed light leaves the light list |
+| Closing the window (X, Alt+F4) leaves the game running invisibly (v1.1.0) | The game window ignores `WM_CLOSE`; Windows destroys the window and the game runs on without it | The game ends when its window is closed |
 | The game changes the mouse arrow of the whole desktop, and keeps it after a crash | Armada shows its cursor with `SetSystemCursor` | The cursor applies to the game's windows only |
 | Fullscreen only | GOG's wrapper supports a window, but is set to fullscreen | `dxcfg.ini`: `presentation=windowed` and a window size |
 
@@ -71,9 +73,14 @@ Tip: `Armada.exe -nointro` skips the intro videos.
   (also scaled to 1280×960 and 1920×1440 on a 150 % display), the desktop cursor stays
   unchanged during and after the game, the game starts without a `Logs` folder, and it no
   longer crashes when other processes hold the wrapper's shared memory names.
-- **Not yet tested: a real multiplayer match on two PCs.** The causes are shown in the code;
-  that the error is gone in a long match still needs a test. If an out-of-sync error still
-  happens, see below.
+- **Two-instance test bed (v1.1.0):** two game instances on one PC play a LAN TCP/IP match
+  against two Hard AIs; both write a full state dump every 50 simulation steps and
+  `tools/cmpdumps.py` compares them. About 173,000 simulation steps in four matches (patched
+  and original): no difference between the two nodes. The AI never used the docking path of
+  the first sync fix in these matches, so the test bed shows "no other divergence, no
+  regression", not yet the fixed paths themselves. Details: `docs/findings.md`.
+- **Not yet tested: a match on two separate PCs**, in particular with an Intel and an AMD CPU
+  (see `docs/findings.md`, "Open"). If an out-of-sync error still happens, see below.
 
 ## If "out of sync" still happens
 
@@ -92,6 +99,7 @@ object that drifted. Please open an issue with both files.
   - `gog_unpack.py` – rebuilds the game files from an `innounp -x` extraction of the GOG installer
   - `pe.py`, `xref.py`, `ctxdis.py`, `audit_callers.py`, `vcall.py`, `reach.py`, `rng_ancestors.py`, `hier.py` – disassembly, RTTI vtable map, call sites, reachability
   - `probe.py`, `launch.ps1`, `trycfg.ps1`, `clickseq.py`, `cursorhash.py`, `fake_dxfilemap.py` – runtime checks (windows, screenshots, FPU control word, cursor, wrapper mapping)
+  - `mp_match.ps1`, `mp_inst.ps1`, `clk.py`, `drag.py`, `shot.py`, `cmpdumps.py`, `watch_mp.sh`, `keys.py` – two-instance multiplayer test bed (needs the test build of the proxy, `src\strlkup_proxy\build.cmd test`)
   - `make_release.py` – builds the proxy, embeds it into the patcher, packs `Armada_MP_fix.exe`
     (`python -m PyInstaller --onefile --console --name Armada_MP_fix release/armada_fix.py`) and writes `SHA256SUMS.txt`
 

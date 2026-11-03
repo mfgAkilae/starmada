@@ -12,4 +12,5 @@ work/
 .venv/
 # proxy build output (release/armada_fix.py embeds the built DLL)
 src/strlkup_proxy/build/
+src/strlkup_proxy/build_test/
 __pycache__/

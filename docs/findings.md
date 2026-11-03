@@ -107,6 +107,45 @@ cursor of the game's own top-level windows (the game window has no child windows
 directly when the mouse is over the game; the previous cursor is destroyed, as
 `SetSystemCursor` would do.
 
+## Finding 6 – the loading screen leaves dead lights in the render engine (fixed, v1.1.0)
+
+Found with the two-instance test bed: the host crashed after about 10 minutes of a LAN match
+with "pure virtual function call" (`msvcrt!_purecall`, exception `0xc0000002`). Stack:
+render `0x43f970` → `0x5b9730` → scene `0x5b9440` → objects `0x5b6620` → `Planet` vtable slot
+2 → mesh `0x58fd80` → mesh lighting `0x5a4410`, which calls virtual slot 18 of every light in
+the engine's active light list. The light had already been destroyed (its vtable was the
+abstract `ST3D_Light` base `0x5d40a8`).
+
+The engine (`ST3D`, global `0x6d4aa0`) keeps the lights of the current render in a list at
+engine+`0x70`: `0x58b380` (AddLight) appends a record that holds a raw `ST3D_Light*`,
+`0x58b440` (via `0x580a00`) deletes all records. The scene render `0x5b9440` clears the list
+at its end. The **loading screen** does not: `0x5b99d0` draws every loading message, adds its
+light `0x6d6854` each time and never clears the list, and its teardown `0x5b9fe0` deletes the
+light. In the test bed one map load left **370 records** of the deleted light in the list
+(host only; the client logged none). By the code, the first scene render after the load calls
+methods of the deleted light through these records before it clears the list, and
+`0x57d670` / `0x5a4410` write the transformed light position into the freed memory. That
+corrupts whatever object reuses the memory; it is the only path we found that puts a dead
+light into the list. Whether the crash at minute 10 came from this corruption or from another
+light destroyed during a render was not proven; the fix below covers both.
+
+No ST3D light destructor removes its records: all four (`ST3D_Light`, `ST3D_Point_Light`,
+`ST3D_Directional_Light`, `ST3D_Spot_Light`) end with `mov [ecx], 0x5d40a8; jmp 0x5958b0`
+(`ST3D_Node` destructor). Fix (runtime proxy): the four jumps go through a function that first
+removes every record of the light from the active list, the same way `0x58b440` does. With the
+fix the test bed logged the 370 removals at the end of the first map load and no further
+dead-light use.
+
+## Finding 7 – closing the window leaves an invisible game running (fixed, v1.1.0)
+
+The game window procedure `0x442d10` does not handle `WM_CLOSE`. `DefWindowProc` destroys
+the window, the main loop keeps running without it and logs "Storm3D Error: Invalid window
+handle" until the process is killed. In fullscreen this needed Alt+F4; in a window the title
+bar's X does it. Reproduced: after `WM_CLOSE` in an Instant Action game the process stayed
+alive without a window. Fix (runtime proxy): `RegisterClassA` for the class "Armada" wraps the
+window procedure; on `WM_CLOSE` the process ends (exit code 0). In a multiplayer game the
+other players see this player leave, as after a disconnect.
+
 ## Windowed mode
 
 `dxcfg.ini` of the GOG wrapper: `presentation` = `application` | `fullscreen` | `windowed`;
@@ -139,10 +178,49 @@ scaled with `scaling` and `aspect`). `display=windowed` is not a valid value. Ar
 - **Version check:** `0x53374e` compares the version label only for the old WON login, not in
   LAN/DirectPlay games.
 
+## Two-instance test bed (v1.1.0)
+
+Armada allows one instance per PC (`FindWindowA("Armada")` at `0x43b115`). The test build of
+the proxy (`src/strlkup_proxy/build.cmd test`, `ARMADA_TESTHOOKS`) adds, controlled by
+environment variables:
+
+- `ARMADA_TEST_MULTI=1`: `FindWindowA("Armada")` returns NULL, so two instances run on one PC;
+- `ARMADA_TEST_DUMP_EVERY=N`: after every N simulation steps (hook on `0x43f880`) a state dump
+  with the game's own sync dump writers (all objects, weapons, ordnance) and the generator
+  states, written to `ARMADA_TEST_DUMP_DIR`; no random numbers are consumed;
+- `diag.txt`: every pure virtual call and every light destroyed while still in the active
+  list, with thread and stack.
+
+`tools/mp_match.ps1` drives both instances through the menus with window messages (host:
+Multiplayer → LAN TCP/IP → Create Game, client: join, host: two "Computer AI: Hard" slots →
+Launch), `tools/cmpdumps.py` compares the dumps of both nodes step by step (ignoring the
+per-node visibility fields), `tools/watch_mp.sh` repeats that every minute. The test build
+also counts the docking approach-angle draws of finding 1 (`docking_angle_draws` in every
+dump).
+
+Results (map `4first.bzn`, two idle human players, two Hard AIs that build fleets and fight;
+both instances on one AMD Ryzen 9 9950X3D):
+
+| Run | Armada.exe | Simulation steps | Dumps compared | Differences | Notes |
+|---|---|---|---|---|---|
+| mp1 | patched | 42,300 | 846 | 0 | host crashed at about 10 min: pure virtual call (finding 6) |
+| mp2 | patched + light fix | 24,150 | 483 | 0 | 370 dead light records removed after the map load, no crash |
+| mp3 | original | 51,950 | 1,039 | 0 | |
+| mp4 | original | 54,350 | 1,087 | 0 | docking draws 0 on both nodes |
+
+Up to 381 objects, damaged ships and torpedoes in flight were in the dumps. The AI never sent
+a ship to a shipyard in these runs (mp4: 0 draws), so these matches do not exercise the two
+sync fixes of findings 1 and 2; they need repair orders of human players and fights where a
+torpedo's shooter is hidden by the fog of war. What the runs show: no other cause of
+divergence in about 173,000 simulation steps of AI combat on one CPU, and no regression from
+the patch.
+
 ## Open
 
-- A long multiplayer match on two PCs with the patch.
-- Intel vs. AMD: the x87 instructions `fsin`/`fcos`/`fpatan` are not guaranteed to give the
-  same last bits on both vendors. Not observed; would need a mixed test.
-- Armada allows one instance per PC (`FindWindowA("Armada")` at `0x43b115`), so a local
-  two-instance test needs a second PC or a VM.
+- A long multiplayer match on two separate PCs.
+- Intel vs. AMD: the simulation uses the x87 instructions `fpatan` (17 sites, e.g. craft
+  orders `0x42af31`, `0x42cd8d`), `fsin`/`fcos` (19/11) and `fptan` (9), and the CRT
+  `_CIasin`, `_CIacos`, `_CIpow`. Intel documents that these instructions use an internal π
+  approximation; results are not guaranteed to be bit-identical between vendors. Not observed
+  (both test instances run on the same CPU); a mixed Intel/AMD match would show it in the sync
+  dumps.
