@@ -1,13 +1,15 @@
-"""mouse_watchdog.py [minutes] [log]: guard the user's mouse during test runs.
+"""mouse_watchdog.py [minutes] [log] [run_dir]: guard the mouse during test runs.
 
 Polls the system cursor clip rectangle every 50 ms. When a test instance confines the
 cursor (a clip inside an Armada window) or an Armada window becomes the foreground
-window, all Armada.exe processes are killed, the clip is released and the event is
-logged. Other clips (e.g. Windows while the user drags a window) are only logged. Ends after the given minutes (default 120) or 60 s after the last
-Armada.exe process ended.
+window, monitored Armada.exe processes are killed, the clip is released and the event
+is logged. With run_dir, only that run's PID files select monitored instances. Other
+clips (e.g. Windows while the user drags a window) are only logged. Ends after the
+given minutes (default 120) or 60 s after the last monitored instance ended.
 """
 import ctypes
 import ctypes.wintypes as w
+from pathlib import Path
 import subprocess
 import sys
 import time
@@ -16,6 +18,7 @@ user32 = ctypes.windll.user32
 user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
 minutes = float(sys.argv[1]) if len(sys.argv) > 1 else 120
 log = open(sys.argv[2] if len(sys.argv) > 2 else r'E:\dev\starmada\work\mouse_watchdog.log', 'a')
+run_dir = Path(sys.argv[3]) if len(sys.argv) > 3 else None
 
 
 def clip():
@@ -27,7 +30,11 @@ def clip():
 def armada_pids():
     out = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq Armada.exe', '/FO', 'CSV', '/NH'],
                          capture_output=True, text=True).stdout
-    return {int(l.split('","')[1]) for l in out.splitlines() if l.startswith('"Armada.exe"')}
+    live = {int(l.split('","')[1]) for l in out.splitlines() if l.startswith('"Armada.exe"')}
+    if run_dir:
+        owned = {int(p.read_text().strip()) for p in run_dir.glob('pid_*.txt')}
+        return live & owned
+    return live
 
 
 def fg_pid():
@@ -92,7 +99,8 @@ while time.time() < end:
     seen_clip = c
     if pids and (held or f in pids):
         why = f'clip={c}' if c != base else f'foreground pid {f} {fg_desc()}'
-        subprocess.run(['taskkill', '/F', '/IM', 'Armada.exe'], capture_output=True)
+        for pid in pids:
+            subprocess.run(['taskkill', '/F', '/PID', str(pid)], capture_output=True)
         user32.ClipCursor(None)
         say(f'ALERT {why}: killed Armada.exe {sorted(pids)}')
         sys.exit(1)

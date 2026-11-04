@@ -392,6 +392,16 @@ angle (`CraftProcess+0x114`) is not in the dump; it changes the ship only in the
 the divergence of finding 1 in a live original match. The isolated instruction replay above
 now reproduces the differing approach-angle indices directly.
 
+## Active player validation, 2026-11-04
+
+Run `play10` added actual ship construction and reciprocal player attack commands via
+the owning clients' native multiplayer output queues, with no AI slots or mirrored
+simulation injection. Four new ships completed, one shipyard completed, both players
+dealt damage, and four ships died in combat. The final comparison covered 460 complete
+dump pairs through step 46,000 with no difference. See
+[`gameplay_validation_2026-11-04.md`](gameplay_validation_2026-11-04.md) for the command
+path evidence, Windows mute/firewall defaults, GOG fixture repair and remaining limits.
+
 ## Open
 
 - A long multiplayer match on two separate PCs.

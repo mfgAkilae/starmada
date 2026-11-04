@@ -1,9 +1,9 @@
 """clk.py <tag> <x> <y> [shot.png]: click into the shell dialog of test instance <tag> (pid_<tag>.txt)."""
-import sys, time
+import os, sys, time
 sys.path.insert(0, r'E:\dev\starmada\tools')
 import probe
 tag, x, y = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
-pid = int(open(rf'E:\dev\starmada\work\pid_{tag}.txt').read().strip())
+pid = int(open(os.path.join(os.environ.get('ARMADA_RUN_DIR', r'E:\dev\starmada\work'), f'pid_{tag}.txt')).read().strip())
 ds = probe.dialogs(pid)
 h = ds[0]['hwnd'] if ds else probe.main_window(pid)['hwnd']
 u = probe.user32

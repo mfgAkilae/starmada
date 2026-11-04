@@ -1,0 +1,275 @@
+{
+  "date": "2026-11-04",
+  "run": "play10",
+  "setup": {
+    "transport": "TCP/IP LAN",
+    "machines": 1,
+    "human_slots": 2,
+    "ai_slots": 0,
+    "A": {
+      "team": 1,
+      "race": "Borg"
+    },
+    "B": {
+      "team": 3,
+      "race": "Klingon"
+    },
+    "mirrored_simulation_injection": false,
+    "launch_arguments": [
+      "-nointro",
+      "-window"
+    ]
+  },
+  "patched_executable_sha256": "6b3676a95607e5b3b2ccc1ca7272aa9a8af2d0bffeb4da1e7b7f38ac7ff7a9d1",
+  "comparison": {
+    "pairs": 460,
+    "first_step": 100,
+    "last_step": 46000,
+    "first_difference": null,
+    "synced_rng": "0e75a15c",
+    "table_index": 230,
+    "ignored_fields": [
+      "isVisible",
+      "seen",
+      "local_rng"
+    ],
+    "normalized_dump_sequence_sha256": {
+      "A": "8ff358b7bae7dc8eefc48bd36c774c71ea7150f00725f36c535ee146abe7182f",
+      "B": "8ff358b7bae7dc8eefc48bd36c774c71ea7150f00725f36c535ee146abe7182f"
+    },
+    "digest_format": "sorted filenames, filename + NUL + normalized Latin-1 lines with LF and final LF",
+    "unpaired_shutdown_dump": "A/step_046100.txt"
+  },
+  "gameplay": {
+    "first_step": 100,
+    "last_step": 46000,
+    "pairs": 460,
+    "built": [
+      {
+        "id": -2147450583,
+        "kind": "constPlaceholder",
+        "name": "mconstph8",
+        "team": 3,
+        "pos": [
+          5400.0,
+          38.5,
+          5500.0
+        ],
+        "health": 0.0,
+        "max_health": 0.0,
+        "first_step": 1700
+      },
+      {
+        "id": -2147417815,
+        "kind": "shipyard",
+        "name": "kyard9",
+        "team": 3,
+        "pos": [
+          5400.512207,
+          39.276573,
+          5500.449707
+        ],
+        "health": 2000.0,
+        "max_health": 2000.0,
+        "first_step": 5700
+      },
+      {
+        "id": -2147450582,
+        "kind": "wingman",
+        "name": "kdestroy10",
+        "team": 3,
+        "pos": [
+          5415.216309,
+          34.831516,
+          5513.393066
+        ],
+        "health": 135.0,
+        "max_health": 135.0,
+        "first_step": 10600
+      },
+      {
+        "id": -2147450581,
+        "kind": "wingman",
+        "name": "kdestroy11",
+        "team": 3,
+        "pos": [
+          5414.652832,
+          34.831516,
+          5512.897949
+        ],
+        "health": 135.0,
+        "max_health": 135.0,
+        "first_step": 12200
+      },
+      {
+        "id": -2147450580,
+        "kind": "wingman",
+        "name": "kdestroy12",
+        "team": 3,
+        "pos": [
+          5413.525879,
+          34.831516,
+          5511.907715
+        ],
+        "health": 135.0,
+        "max_health": 135.0,
+        "first_step": 13800
+      },
+      {
+        "id": -2147450576,
+        "kind": "constructionrig",
+        "name": "bconst13",
+        "team": 1,
+        "pos": [
+          676.241394,
+          57.059299,
+          481.479156
+        ],
+        "health": 700.0,
+        "max_health": 700.0,
+        "first_step": 17900
+      }
+    ],
+    "damaged": [
+      {
+        "id": -2147450743,
+        "first_step": 17300,
+        "team": 1,
+        "name": "bscout3",
+        "peak": 120.0,
+        "enemy": "-2147450582",
+        "lowest_health": -7.57676,
+        "last_enemy": "-2147450582",
+        "removed_step": 18700
+      },
+      {
+        "id": -2147450582,
+        "first_step": 17400,
+        "team": 3,
+        "name": "kdestroy10",
+        "peak": 135.0,
+        "enemy": "-2147450743",
+        "lowest_health": -23.990639,
+        "last_enemy": "-2147450749",
+        "removed_step": 25800
+      },
+      {
+        "id": -2147450749,
+        "first_step": 25600,
+        "team": 1,
+        "name": "bbase2",
+        "peak": 6000.0,
+        "enemy": "-2147450582",
+        "lowest_health": 5963.923828,
+        "last_enemy": "-2147450581",
+        "removed_step": null
+      },
+      {
+        "id": -2147450581,
+        "first_step": 37400,
+        "team": 3,
+        "name": "kdestroy11",
+        "peak": 135.0,
+        "enemy": "-2147450749",
+        "lowest_health": -22.357279,
+        "last_enemy": "-2147450749",
+        "removed_step": 37700
+      },
+      {
+        "id": -2147450580,
+        "first_step": 37600,
+        "team": 3,
+        "name": "kdestroy12",
+        "peak": 135.0,
+        "enemy": "-2147450749",
+        "lowest_health": -22.83392,
+        "last_enemy": "-2147450749",
+        "removed_step": 38400
+      },
+      {
+        "id": -2147450576,
+        "first_step": 37700,
+        "team": 1,
+        "name": "bconst13",
+        "peak": 700.0,
+        "enemy": "-2147450580",
+        "lowest_health": 672.892578,
+        "last_enemy": "-2147450580",
+        "removed_step": null
+      }
+    ]
+  },
+  "submitted_commands": {
+    "A": [
+      "network command 639198766 action 3 actor 8000806f target 00000000 team 1 at step 1230",
+      "network command 639397793 action 1 actor 80008083 target 00000000 team 1 at step 14499",
+      "network command 639398218 action 2 actor 80008089 target 8000812a team 1 at step 14527",
+      "network command 639486423 action 3 actor 8000806f target 00000000 team 1 at step 20408",
+      "network command 639525678 action 3 actor 8000806f target 00000000 team 1 at step 23025",
+      "network command 639526691 action 2 actor 80008083 target 8000812a team 1 at step 23092",
+      "network command 639666176 action 2 actor 80008083 target 8000812b team 1 at step 32391"
+    ],
+    "B": [
+      "network command 639199199 action 3 actor 80008092 target 00000000 team 3 at step 1256",
+      "network command 639314801 action 1 actor 80010129 target 00000000 team 3 at step 8963",
+      "network command 639315176 action 1 actor 80010129 target 00000000 team 3 at step 8988",
+      "network command 639315540 action 1 actor 80010129 target 00000000 team 3 at step 9012",
+      "network command 639398642 action 2 actor 8000812a target 80008089 team 3 at step 14552",
+      "network command 639526278 action 2 actor 8000812a target 80008083 team 3 at step 23062",
+      "network command 639665105 action 2 actor 8000812b target 80008083 team 3 at step 32317",
+      "network command 639665542 action 2 actor 8000812c target 80008130 team 3 at step 32346"
+    ]
+  },
+  "windows": {
+    "mute_before_DirectSoundCreate_S_OK_count": {
+      "A": 1,
+      "B": 1
+    },
+    "mixer_GetMute_verified_true_for_both_clients": true,
+    "firewall": {
+      "changed": false,
+      "ok": true,
+      "rules": [
+        {
+          "profile": "Private",
+          "rule": "Codex.Armada.LAN.50E961AB0379C579",
+          "program": "work/play_clients/live/A/Armada.exe",
+          "verified": true,
+          "remote": "LocalSubnet"
+        },
+        {
+          "profile": "Private",
+          "rule": "Codex.Armada.LAN.12B6EB9E80ED2647",
+          "program": "work/play_clients/live/B/Armada.exe",
+          "verified": true,
+          "remote": "LocalSubnet"
+        }
+      ]
+    },
+    "watchdog_log": [
+      "11:25:11 start clip=(0, 0, 7680, 2160)",
+      "11:31:01 clip=(0, 0, 7680, 2088) not inside an Armada window, ignored",
+      "11:39:37 no Armada.exe for 60 s, done",
+      "11:39:37 end"
+    ]
+  },
+  "limits": [
+    "one PC; no mixed CPU or mod test",
+    "Borg yard placement attempts not completed; no speculative patch",
+    "native screenshots black except cursor; foreground UI not validated",
+    "no blanket assurance that all out-of-sync causes are fixed"
+  ],
+  "repeat_startup": {
+    "run": "play11",
+    "exit_after": 2000,
+    "compared_pairs": 20,
+    "last_compared_step": 2000,
+    "first_difference": null,
+    "firewall_changed": false,
+    "mute_before_DirectSoundCreate_S_OK_count": {
+      "A": 1,
+      "B": 1
+    },
+    "mixer_GetMute_verified_true_for_both_clients": true
+  }
+}

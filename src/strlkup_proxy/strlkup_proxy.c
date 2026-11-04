@@ -31,6 +31,10 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <intrin.h>
+#ifdef ARMADA_TESTHOOKS
+#include <mmdeviceapi.h>
+#include <audiopolicy.h>
+#endif
 
 #ifndef OCR_NORMAL
 #define OCR_NORMAL 32512
@@ -209,9 +213,22 @@ static HMODULE WINAPI local_LoadLibraryA(LPCSTR name)
  */
 static WNDPROC g_game_wndproc;
 static void release_clip(void);
+#ifdef ARMADA_TESTHOOKS
+static BOOL g_virtual_input;
+static BOOL test_input_event(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+static LRESULT test_network_event(LPARAM lp);
+#endif
 
 static LRESULT CALLBACK game_wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+#ifdef ARMADA_TESTHOOKS
+    if (msg == WM_COPYDATA)
+        return test_network_event(lp);
+    if (test_input_event(hwnd, msg, wp, lp))
+        return 0;
+    if (g_virtual_input && msg == WM_ACTIVATE && LOWORD(wp) == WA_INACTIVE)
+        return 0;  /* logical device stays active; OS focus stays with the user */
+#endif
     if (msg == WM_CLOSE) {
         TerminateProcess(GetCurrentProcess(), 0);
         return 0;
@@ -542,6 +559,7 @@ static void install_light_fix(void)
  *   ARMADA_TEST_DUMP_DIR    folder for the dumps (default Logs)
  *   ARMADA_TEST_EXIT_AFTER  terminate the process after N simulation steps
  *   ARMADA_TEST_MULTI       1: allow a second instance (FindWindowA("Armada") returns NULL)
+ *   ARMADA_TEST_INPUT       1: enable per-client virtual input and normal network-queue commands
  *   ARMADA_TEST_INJECT_STEP/_ORDER/_REPEAT  give every ship an order (CommandAllShips) at that
  *                           simulation step and then every _REPEAT steps
  *   ARMADA_TEST_NO_LIGHTFIX 1: leave the light destructors unpatched
@@ -621,6 +639,327 @@ static unsigned env_uint(const char *name)
     for (i = 0; i < n && i < sizeof(buf) && buf[i] >= '0' && buf[i] <= '9'; i++)
         v = v * 10 + (unsigned)(buf[i] - '0');
     return v;
+}
+
+/* Optional local input device for real gameplay tests. Only the device Poll and
+   modifier queries are virtual; the original UI and multiplayer command queue run.
+   Private messages are outside the ranges drained by the game's mouse/key handlers.
+   A sequence is acknowledged only when a device Poll consumes it. */
+#define INPUT_ENABLE (WM_APP + 0x410)
+#define INPUT_MOVE   (WM_APP + 0x411)
+#define INPUT_BUTTON (WM_APP + 0x412)
+#define INPUT_KEY    (WM_APP + 0x413)
+#define INPUT_CAPTURE (WM_APP + 0x414)
+typedef int (__cdecl *mousepoll_fn)(int *, int *, DWORD *);
+static mousepoll_fn g_original_mousepoll;
+static int g_virtual_x, g_virtual_y;
+static DWORD g_virtual_buttons, g_virtual_seq, g_virtual_ack;
+static volatile BYTE g_virtual_keys[256];
+static BOOL g_input_available;
+static DWORD g_capture_seq;
+
+typedef HRESULT (WINAPI *dsound_create_fn)(const GUID *, void **, void *);
+static dsound_create_fn g_DirectSoundCreate;
+
+/* Create/mute this process's Windows mixer session before DirectSound creates
+   its first stream. This runs outside DllMain, on the actual audio-init call. */
+static HRESULT mute_test_audio(void)
+{
+    static const GUID device_class = {0xbcde0395,0xe52f,0x467c,{0x8e,0x3d,0xc4,0x57,0x92,0x91,0x69,0x2e}};
+    static const GUID enumerator_iid = {0xa95664d2,0x9614,0x4f35,{0xa7,0x46,0xde,0x8d,0xb6,0x36,0x17,0xe6}};
+    static const GUID manager_iid = {0xbfa971f1,0x4d5e,0x40bb,{0x93,0x5e,0x96,0x70,0x39,0xbf,0xbe,0xe4}};
+    IMMDeviceEnumerator *enumerator = NULL;
+    IMMDevice *device = NULL;
+    IAudioSessionManager *manager = NULL;
+    ISimpleAudioVolume *volume = NULL;
+    HRESULT init = CoInitializeEx(NULL, COINIT_MULTITHREADED), hr;
+    hr = CoCreateInstance(&device_class, NULL, CLSCTX_INPROC_SERVER,
+                          &enumerator_iid, (void **)&enumerator);
+    if (SUCCEEDED(hr)) hr = enumerator->lpVtbl->GetDefaultAudioEndpoint(enumerator, eRender, eMultimedia, &device);
+    if (SUCCEEDED(hr)) hr = device->lpVtbl->Activate(device, &manager_iid,
+                                                    CLSCTX_INPROC_SERVER, NULL, (void **)&manager);
+    if (SUCCEEDED(hr)) hr = manager->lpVtbl->GetSimpleAudioVolume(manager, NULL, FALSE, &volume);
+    if (SUCCEEDED(hr)) hr = volume->lpVtbl->SetMute(volume, TRUE, NULL);
+    if (volume) volume->lpVtbl->Release(volume);
+    if (manager) manager->lpVtbl->Release(manager);
+    if (device) device->lpVtbl->Release(device);
+    if (enumerator) enumerator->lpVtbl->Release(enumerator);
+    if (SUCCEEDED(init)) CoUninitialize();
+    log_line("Windows mixer mute before DirectSoundCreate: %08lx", hr);
+    return hr;
+}
+
+static HRESULT WINAPI test_DirectSoundCreate(const GUID *guid, void **sound, void *outer)
+{
+    HRESULT hr = mute_test_audio();
+    if (FAILED(hr)) return hr;  /* do not start audible test streams */
+    return g_DirectSoundCreate(guid, sound, outer);
+}
+
+static void install_test_mute(void)
+{
+    DWORD prot;
+    dsound_create_fn *slot = (dsound_create_fn *)0x6d7a54;
+    g_DirectSoundCreate = (dsound_create_fn)GetProcAddress(GetModuleHandleA("dsound.dll"), "DirectSoundCreate");
+    /* GOG 1.2 imports DSOUND ordinal 1, without an import name. */
+    if (g_DirectSoundCreate && *slot == g_DirectSoundCreate &&
+        VirtualProtect(slot, sizeof(*slot), PAGE_READWRITE, &prot)) {
+        *slot = test_DirectSoundCreate;
+        VirtualProtect(slot, sizeof(*slot), prot, &prot);
+    }
+}
+
+typedef struct {
+    DWORD seq, action, actor, target;
+    char name[8];
+    float position[3];
+} test_command;
+
+/* Submit one player's command to that client's original output queue. The game
+   distributes and validates it normally. This never invokes simulation orders
+   directly and never submits the command on the other peer. */
+static LRESULT test_network_event(LPARAM lp)
+{
+    typedef void *(__cdecl *lookup_fn)(DWORD);
+    COPYDATASTRUCT *copy = (COPYDATASTRUCT *)lp;
+    test_command *command;
+    char *actor, *target = NULL, *build = NULL;
+    void *vector, **item, **end;
+    char name[9];
+    unsigned team;
+    DWORD function, order;
+    float *position;
+    static DWORD last_sequence;
+    if (!g_input_available || !copy || copy->dwData != 0x41524d44 ||
+        copy->cbData != sizeof(test_command) || !copy->lpData)
+        return 2;
+    command = (test_command *)copy->lpData;
+    if (last_sequence == command->seq) return 1;
+    if (!g_steps || !*(void **)0x6787c4)
+        return 0; /* retry in the normal command-collection message pump */
+    actor = (char *)((lookup_fn)0x46cf50)(command->actor);
+    team = ((unsigned (__cdecl *)(void))0x46d060)();
+    if (!actor || !(*(DWORD *)(actor + 0xbc) & 4) || *(unsigned *)(actor + 0x194) != team)
+        return 2;
+    if (command->action == 1 || command->action == 3) {
+        int i;
+        for (i = 0; i < 8; i++) name[i] = command->name[i];
+        name[8] = 0;
+        vector = *(void **)0x63a00c;
+        if (!vector) return 2;
+        item = *(void ***)((char *)vector + 4);
+        end = *(void ***)((char *)vector + 8);
+        for (; item < end; item++) {
+            if (lstrcmpiA(*(const char **)((char *)*item + 0x8c), name) == 0) {
+                build = (char *)*item;
+                break;
+            }
+        }
+        if (!build) return 2; /* only classes already loaded by this game */
+        function = command->action == 1 ? 0x470d20 : 0x470da0;
+        order = 28;
+        position = command->position;
+        if (command->action == 3) {
+            __asm { push position }
+        }
+        __asm {
+            push build
+            push order
+            mov ecx, actor
+            call function
+        }
+    } else if (command->action == 2) {
+        target = (char *)((lookup_fn)0x46cf50)(command->target);
+        if (!target || *(unsigned *)(target + 0x194) == team) return 2;
+        function = 0x470bf0;
+        order = 5;
+        __asm {
+            push target
+            push order
+            mov ecx, actor
+            call function
+        }
+    } else return 2;
+    last_sequence = command->seq;
+    log_line("network command %lu action %lu actor %08lx target %08lx team %u at step %u",
+             command->seq, command->action, command->actor, command->target, team, g_steps);
+    return 1;
+}
+
+/* Native DirectX7 screenshot API. With the GOG wrapper an occluded capture may
+   omit the 3D image; it is diagnostic output, not proof of a rendered game view. */
+static void capture_game_frame(DWORD seq)
+{
+    typedef void *(__cdecl *image_alloc_fn)(unsigned);
+    char *engine = *(char **)0x6d4aa0, *device;
+    void *image;
+    int width, height;
+    const char *name = "test frame";
+    char path[MAX_PATH + 40];
+    if (!engine || !(device = *(char **)(engine + 0xe4)) || *(DWORD *)device != 0x5d3d8c) {
+        log_line("capture %lu: native DirectX7 device unavailable", seq);
+        return;
+    }
+    __asm {
+        mov eax, device
+        fld dword ptr [eax + 0xcc]
+        fistp width
+        fld dword ptr [eax + 0xd0]
+        fistp height
+    }
+    image = ((image_alloc_fn)0x5bb998)(0x50);
+    if (!image) return;
+    __asm {
+        push 0
+        push 1
+        push height
+        push width
+        push name
+        push 0
+        mov ecx, image
+        mov eax, 0x59e4e0
+        call eax
+        mov image, eax
+        push 0
+        push image
+        mov ecx, device
+        mov eax, [ecx]
+        call dword ptr [eax + 0x14]
+    }
+    wsprintfA(path, "%s\\frame_%lu.bmp", g_dump_dir, seq);
+    __asm {
+        lea eax, path
+        push eax
+        mov ecx, image
+        mov eax, 0x59f530
+        call eax
+        mov ecx, image
+        mov eax, [ecx]
+        push 1
+        call dword ptr [eax]
+    }
+    log_line("capture %lu: native %d x %d at step %u local team %u", seq, width, height,
+             g_steps, ((unsigned (__cdecl *)(void))0x46d060)());
+}
+
+/* Capture the completed back buffer immediately before its normal presentation.
+   A simulation-step callback may run after the buffer has already been cleared. */
+static void capture_pending_frame(void)
+{
+    DWORD seq = g_capture_seq;
+    if (seq) {
+        g_capture_seq = 0;
+        capture_game_frame(seq);
+    }
+}
+
+static __declspec(naked) void test_present(void)
+{
+    __asm {
+        pushfd
+        pushad
+        call capture_pending_frame
+        popad
+        popfd
+        mov eax, 0x581fb0
+        jmp eax
+    }
+}
+
+static SHORT WINAPI test_GetKeyState(int key)
+{
+    return key >= 0 && key < 256 && g_virtual_keys[key] ? (SHORT)-28672 : 0;
+}
+
+static int __cdecl test_mousepoll(int *state, int *out, DWORD *buttons)
+{
+    int i;
+    if (!g_virtual_input)
+        return g_original_mousepoll(state, out, buttons);
+    state[0] = g_virtual_x; state[1] = 0;
+    state[2] = g_virtual_y; state[3] = 0;
+    for (i = 0; i < 4; i++)
+        out[i] = state[i];
+    if (buttons)
+        *buttons = g_virtual_buttons;
+    if (g_virtual_seq != g_virtual_ack) {
+        g_virtual_ack = g_virtual_seq;
+        log_line("input ack %lu step %u axes %d %d buttons %lu", g_virtual_ack, g_steps,
+                 g_virtual_x, g_virtual_y, g_virtual_buttons);
+    }
+    return 0;
+}
+
+static BOOL test_input_event(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    UINT vk, scan;
+    LPARAM flags;
+    int i;
+    if (msg < INPUT_ENABLE || msg > INPUT_CAPTURE)
+        return FALSE;
+    if (!g_input_available)
+        return TRUE;
+    if (msg == INPUT_CAPTURE) {
+        g_capture_seq = (DWORD)wp;
+        return TRUE;
+    }
+    if (msg == INPUT_ENABLE) {
+        g_virtual_input = wp != 0;
+        g_virtual_buttons = 0;
+        for (i = 0; i < 256; i++)
+            g_virtual_keys[i] = 0;
+        /* WA_ACTIVE with lParam=0 only sets the game's logical input flags. The
+           original branch calls engine Activate(true,false), with no OS focus. */
+        CallWindowProcA(g_game_wndproc, hwnd, WM_ACTIVATE,
+                        g_virtual_input ? WA_ACTIVE : WA_INACTIVE, 0);
+        log_line("virtual input %s", g_virtual_input ? "enabled" : "disabled");
+        return TRUE;
+    }
+    if (!g_virtual_input)
+        return TRUE;
+    g_virtual_seq = (DWORD)wp;
+    if (msg == INPUT_MOVE) {
+        g_virtual_x = (int)(short)LOWORD(lp) * 131072 / 640 - 65536;
+        g_virtual_y = (int)(short)HIWORD(lp) * 131072 / 480 - 65536;
+    } else if (msg == INPUT_BUTTON) {
+        /* Poll uses bits 0/1 for left/right, as the original mouse device does. */
+        if (lp == 1) g_virtual_buttons |= 1;
+        if (lp == 2) g_virtual_buttons &= ~1u;
+        if (lp == 3) g_virtual_buttons |= 2;
+        if (lp == 4) g_virtual_buttons &= ~2u;
+    } else if (msg == INPUT_KEY) {
+        vk = LOWORD(lp);
+        if (vk < 256) {
+            g_virtual_keys[vk] = HIWORD(lp) ? 0 : 1;
+            scan = MapVirtualKeyA(vk, MAPVK_VK_TO_VSC);
+            flags = 1 | (scan << 16);
+            if (HIWORD(lp))
+                flags |= (LPARAM)0xc0000000;
+            CallWindowProcA(g_game_wndproc, hwnd, HIWORD(lp) ? WM_KEYUP : WM_KEYDOWN, vk, flags);
+        }
+    }
+    return TRUE;
+}
+
+static void install_virtual_input(HMODULE exe)
+{
+    DWORD prot;
+    mousepoll_fn *slot = (mousepoll_fn *)0x60834c;
+    if (env_uint("ARMADA_TEST_INPUT") != 1)
+        return;
+    if (*slot != (mousepoll_fn)0x477430 || !VirtualProtect(slot, sizeof(*slot), PAGE_READWRITE, &prot))
+        return;
+    g_original_mousepoll = *slot;
+    *slot = test_mousepoll;
+    VirtualProtect(slot, sizeof(*slot), prot, &prot);
+    slot = (mousepoll_fn *)(0x5d3d8c + 0x4c);
+    if (*(DWORD *)slot == 0x581fb0 && VirtualProtect(slot, sizeof(*slot), PAGE_READWRITE, &prot)) {
+        *(DWORD *)slot = (DWORD)test_present;
+        VirtualProtect(slot, sizeof(*slot), prot, &prot);
+    }
+    patch_import(exe, "USER32.dll", "GetKeyState", (void *)test_GetKeyState);
+    patch_import(exe, "USER32.dll", "GetAsyncKeyState", (void *)test_GetKeyState);
+    g_input_available = TRUE;
 }
 
 static void dump_state(unsigned step)
@@ -791,6 +1130,8 @@ static void install_test_hooks(HMODULE exe)
     if (env_uint("ARMADA_TEST_MULTI") == 1)
         patch_import(exe, "USER32.dll", "FindWindowA", (void *)local_FindWindowA);
     stay_in_background(exe);
+    install_test_mute();
+    install_virtual_input(exe);
     g_cbt = SetWindowsHookExA(WH_CBT, cbt_proc, NULL, GetCurrentThreadId());
     install_dock_counters();
     install_o8_counter();

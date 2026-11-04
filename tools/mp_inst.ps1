@@ -1,6 +1,6 @@
 param([string]$Tag = 'A', [string]$Run = 'mp1', [int]$DumpEvery = 50, [int]$ExitAfter = 0,
       [string]$GameDir = 'E:\dev\starmada\work\testrun',
-      [int]$InjectStep = 0, [int]$InjectOrder = 0, [int]$InjectRepeat = 0)
+      [int]$InjectStep = 0, [int]$InjectOrder = 0, [int]$InjectRepeat = 0, [switch]$NativeWindow)
 # Starts one test instance for the two-instance multiplayer test bed (test proxy required).
 $out = "E:\dev\starmada\work\det\$Run\$Tag"
 New-Item -ItemType Directory -Force $out | Out-Null
@@ -13,6 +13,10 @@ $env:ARMADA_TEST_INJECT_STEP = "$InjectStep"
 $env:ARMADA_TEST_INJECT_ORDER = "$InjectOrder"
 $env:ARMADA_TEST_INJECT_REPEAT = "$InjectRepeat"
 # started without activation; the test proxy keeps the game in the background
-$id = & 'E:\dev\starmada\.venv\Scripts\python.exe' 'E:\dev\starmada\tools\start_bg.py' "$GameDir\Armada.exe" $GameDir '-nointro'
+$gameArguments = @('-nointro')
+if ($NativeWindow) { $gameArguments += '-window' }
+$id = & 'E:\dev\starmada\.venv\Scripts\python.exe' 'E:\dev\starmada\tools\start_bg.py' "$GameDir\Armada.exe" $GameDir @gameArguments
+if ($LASTEXITCODE -ne 0 -or "$id" -notmatch '^\d+$') { throw 'Game process failed to start.' }
 $id | Out-File -Encoding ascii "E:\dev\starmada\work\pid_$Tag.txt"
+$id | Out-File -Encoding ascii "E:\dev\starmada\work\det\$Run\pid_$Tag.txt"
 "$Tag pid $id"

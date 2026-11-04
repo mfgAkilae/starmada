@@ -96,6 +96,13 @@ Tip: `Armada.exe -nointro` skips the intro videos.
   indices; patched calls agree. The original torpedo renderer changes the target only for
   the hidden-shooter fixture; the patched renderer preserves it for both. These are isolated
   checks, separate from a real multiplayer match.
+- **Active human-slot gameplay (2026-11-04):** two separately controlled clients built
+  ships, attacked each other, exchanged damage and lost units through the original
+  multiplayer command queues. Final comparison: 46,000 steps, 460 matching dump pairs,
+  no crash or cursor/focus alert. Future test starts mute the Windows audio session
+  before DirectSound opens and reuse persistent Private-LAN firewall rules on fixed
+  game paths. Method, observed builds/combat and limits:
+  [`docs/gameplay_validation_2026-11-04.md`](docs/gameplay_validation_2026-11-04.md).
 - **Release tool (v1.2.0):** apply/reapply/restore, unsupported exe, invalid window option,
   mod-library collision, double-click and drag-and-drop checked on copies of the GOG files.
   The production mouse guard is also checked with recording callbacks: a background game

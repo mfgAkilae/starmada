@@ -1,58 +1,85 @@
-"""Reassemble files from an innounp-extracted GOG installer (chunked {tmp} format).
+"""Reassemble an innounp-extracted GOG installer, including continuation chunks.
 
-Usage: py -I gog_unpack.py <innounp_extract_dir> <output_dir>
+Usage: python gog_unpack.py <innounp_extract_dir> <output_dir>
+Every chunk and complete file must match the install manifest before it is written.
 """
 import hashlib
 import lzma
-import os
+from pathlib import Path
 import re
 import sys
 import zlib
 
-BS = chr(92)
-
-src, out = sys.argv[1], sys.argv[2]
-iss = open(os.path.join(src, 'install_script.iss'), encoding='utf-8-sig').read()
-pat = re.compile(
-    r'Source: "\{tmp\}\\([0-9a-f]{2})\\([0-9a-f]{2})\\([0-9a-f]{32})";.*?'
-    r"BeforeInstall: \"before_install(_dependency)?\('([0-9a-f]{32})', '(.*?)', (\d+)\)\";\s*"
-    r"AfterInstall: \"after_install(?:_dependency)?\('([0-9a-f]{32})', (\d+), (\d+)\)\"")
-files = {}
-order = []
-for m in pat.finditer(iss):
-    a, b, chunk, dep, fmd5, name, cnt, fmd5b, csize, usize = m.groups()
-    key = (fmd5, name)
-    if key not in files:
-        files[key] = []
-        order.append(key)
-    files[key].append(os.path.join(src, '{tmp}', a, b, chunk))
+SOURCE = re.compile(r'Source: "\{tmp\}\\([0-9a-f]{2})\\([0-9a-f]{2})\\([0-9a-f]{32})";')
+BEFORE = re.compile(r"before_install(?:_dependency)?\('([0-9a-f]{32})', '(.*?)', (\d+)\)")
+AFTER = re.compile(r"after_install(?:_dependency)?\('([0-9a-f]{32})', (\d+), (\d+)\)")
 
 
 def decomp(data):
     for f in (zlib.decompress, lambda d: zlib.decompress(d, -15), lzma.decompress):
         try:
             return f(data)
-        except Exception:
+        except (zlib.error, lzma.LZMAError):
             pass
     return data
 
 
-ok = bad = 0
-for key in order:
-    fmd5, name = key
-    buf = b''.join(decomp(open(p, 'rb').read()) for p in files[key])
-    good = hashlib.md5(buf).hexdigest() == fmd5
-    dest = os.path.join(out, name.replace(BS, os.sep))
-    os.makedirs(os.path.dirname(dest) or out, exist_ok=True)
-    with open(dest, 'wb') as fh:
-        fh.write(buf)
-    ok += good
-    bad += not good
-    if not good:
-        print('MD5 MISMATCH', name, len(buf))
-# [Dirs] entries (the game needs e.g. Logs\ and save\; fopen on a missing Logs\ dir hits int3)
-sec = iss.find('[Dirs]')
-if sec >= 0:
-    for m in re.finditer(r'Name: "\{app\}[/\\]?(.*?)";', iss[sec:iss.find('\n[', sec + 1)]):
-        os.makedirs(os.path.join(out, m.group(1).replace(BS, os.sep)), exist_ok=True)
-print('files', len(order), 'ok', ok, 'bad', bad)
+def manifest(iss):
+    """Only the first chunk has BeforeInstall; subsequent rows have AfterInstall only."""
+    entries, current = [], None
+    for line in iss.splitlines():
+        source, before, after = SOURCE.search(line), BEFORE.search(line), AFTER.search(line)
+        if not source or not after:
+            continue
+        if before:
+            if current is not None:
+                raise ValueError('missing continuation chunks for ' + current['name'])
+            current = dict(md5=before[1], name=before[2], count=int(before[3]), chunks=[])
+        if current is None:
+            raise ValueError('continuation chunk without BeforeInstall')
+        current['chunks'].append((source.groups(), after[1], int(after[3])))
+        if len(current['chunks']) == current['count']:
+            entries.append(current)
+            current = None
+    if current is not None:
+        raise ValueError('missing continuation chunks for ' + current['name'])
+    if not entries:
+        raise ValueError('no GOG chunk entries found in manifest')
+    return entries
+
+
+def unpack(src, out):
+    src, out = Path(src), Path(out).resolve()
+    iss = (src / 'install_script.iss').read_text(encoding='utf-8-sig')
+    entries = manifest(iss)
+    for entry in entries:
+        pieces = []
+        for parts, expected, expanded in entry['chunks']:
+            chunk = decomp((src / '{tmp}' / Path(*parts)).read_bytes())
+            if len(chunk) != expanded or hashlib.md5(chunk).hexdigest() != expected:
+                raise ValueError('chunk length/MD5 mismatch for ' + entry['name'])
+            pieces.append(chunk)
+        buf = b''.join(pieces)
+        if hashlib.md5(buf).hexdigest() != entry['md5']:
+            raise ValueError('complete-file MD5 mismatch for ' + entry['name'])
+        dest = (out / entry['name'].replace('\\', '/')).resolve()
+        if out not in dest.parents:
+            raise ValueError('file path escapes output directory')
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(buf)
+    start = iss.find('[Dirs]')
+    if start >= 0:
+        end = iss.find('\n[', start + 1)
+        for match in re.finditer(r'Name: "\{app\}[/\\]?(.*?)";', iss[start:end if end >= 0 else None]):
+            dest = (out / match[1].replace('\\', '/')).resolve()
+            if dest != out and out not in dest.parents:
+                raise ValueError('directory path escapes output directory')
+            dest.mkdir(parents=True, exist_ok=True)
+    print('files', len(entries), 'ok', len(entries), 'bad 0')
+    return len(entries)
+
+
+if __name__ == '__main__':
+    if len(sys.argv) != 3:
+        raise SystemExit(__doc__)
+    unpack(*sys.argv[1:])

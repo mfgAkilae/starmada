@@ -9,10 +9,12 @@ call "%VCVARS%" >nul || exit /b 1
 cd /d "%~dp0"
 set OUT=build
 set DEFS=
+set EXTRALIBS=
 if /i "%1"=="test" (
   set OUT=build_test
   set DEFS=/DARMADA_TESTHOOKS
+  set EXTRALIBS=ole32.lib uuid.lib
 )
 if not exist %OUT% mkdir %OUT%
-cl /nologo /O2 /W4 /GS- /MT /LD %DEFS% strlkup_proxy.c /Fo%OUT%\ /Fe%OUT%\Strlkup.dll /link /NODEFAULTLIB:libcmt /ENTRY:DllMain /SUBSYSTEM:WINDOWS kernel32.lib user32.lib || exit /b 1
+cl /nologo /O2 /W4 /GS- /MT /LD %DEFS% strlkup_proxy.c /Fo%OUT%\ /Fe%OUT%\Strlkup.dll /link /NODEFAULTLIB:libcmt /ENTRY:DllMain /SUBSYSTEM:WINDOWS kernel32.lib user32.lib %EXTRALIBS% || exit /b 1
 echo built %~dp0%OUT%\Strlkup.dll
