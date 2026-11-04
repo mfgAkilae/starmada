@@ -88,3 +88,11 @@ without any change, so those comparisons are temporally confounded.
 
 The six-player Late-Game Gate remains open; failed or interrupted initialization
 is not counted as gameplay. No new OOS-elimination claim is made by v1.3.1.
+
+A final isolated backend diagnostic used the official DXVK3.1.1 x86 D3D9 DLL
+only beside the probe executable, with its upstream asset digest verified.
+It also failed initialization (`VK_ERROR_INITIALIZATION_FAILED` beneath the
+Direct3D error), including with implicit Vulkan Layers disabled just for the
+probe Processes. No Game installation received this backend. The startup problem
+therefore remains a blocker for a new real six-player test; a Windows restart is
+the next system-state comparison, not a proven fix.
