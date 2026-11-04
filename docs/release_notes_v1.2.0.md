@@ -66,3 +66,19 @@ With Python 3.8+ you can run `armada_fix.py` instead (`apply`, `status`, `restor
 - A patched and an unpatched `Armada.exe` must not play together.
 
 Details and addresses: `docs/findings.md`.
+
+### Active-player validation (2026-11-04)
+
+Two separately controlled human slots built ships and attacked each other through the
+original multiplayer command queues. Run `play10`: **46,000 simulation steps, 460 matching
+dump pairs**, four completed new ships, reciprocal damage and four combat deaths, with
+no recorded exception or mouse/focus alert. This extends the earlier AI/injection tests;
+it remains a one-PC test and does not establish that every out-of-sync cause is fixed.
+
+The test launcher now mutes each Windows audio session before DirectSound opens and
+checks persistent Private-LAN firewall rules before starting the fixed game paths. A
+fresh repeat start (`play11`) confirmed mute on both clients, no firewall rule changes,
+and 20 matching dump pairs through its configured exit at step 2,000.
+
+These are test-harness improvements; the downloadable v1.2.0 game patch is unchanged.
+[Full method, observations and remaining limits](https://github.com/mfgAkilae/starmada/blob/dd413c3/docs/gameplay_validation_2026-11-04.md).
