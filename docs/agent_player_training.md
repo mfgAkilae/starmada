@@ -4,6 +4,8 @@ Main vergibt Run, Client-Ownership und Attack-Windows: **A/B Federation, C/D Kli
 
 **Proof-Stand:** Der frühere B-UI-Proof belegt Construction, Defense, Move, Selection und Groups. Mining, Deposit, Research und Special-Casts sind damit **noch nicht praktisch validiert**. Die folgenden Zahlen, Prerequisites und Ability-Pfade sind Source-Facts; jeder Player muss ihre tatsächliche Funktion im neuen Run beobachten.
 
+**Gameplay-Priorität:** Fehlende Detail-Proofs sind keine Anweisung, eine vorhandene Fleet stillstehen zu lassen. Sichtbare Mining-Station, Mining-Beam und beobachtetes positives Income reichen operativ, um Production, Research und Combat fortzusetzen. Cargo-/Deposit-Detail-Proofs nebenbei ergänzen und weiterhin ehrlich als offen führen. Ein erster Skirmish beginnt mit einer einsatzfähigen kleinen Group; Economy und andere Groups während Builds/Travel weiter steuern.
+
 Quellen: [GOG Manual.pdf](../work/install/Manual.pdf), PDF Pages **4, 6-8, 23-25, 37-43, 46**; [Input.map](../work/install/Input.map); Stock-Members aus [assets.zfs](../work/install/assets.zfs), insbesondere `tech1.tt`, `fmining.odf`, `ffreight.odf`, `fbase.odf` und die unten genannten Research-Pods als `.odf`-Members, etwa `assets.zfs::fedpod4.odf`.
 
 ## 1. UI-Vertrag und Evidence
@@ -93,4 +95,4 @@ Jeder der sechs Player braucht einen eigenen, mit Frames belegten Ledger:
 - [ ] Mindestens ein zur Slot-Role passender, tatsächlich beobachteter Special-Cast mit Before/After-Proof. Weitere freigeschaltete Abilities im Match einsetzen.
 - [ ] Offene Mechanics und fehlende Runtime-Proofs klar an Main gemeldet; keine Source-Aussage als praktischen Erfolg ausgegeben.
 
-Nach diesen sechs individuellen Acceptances koordiniert Main größere Fleets und mehrere gleichzeitige Fronten. Economy weiter betreiben: Income reinvestieren, Moons/Travel-Routen sichern, Verluste ersetzen, Ships zwischen Front und Repair rotieren und Specials gezielt einsetzen. Late-Game-Training verlangt beobachtete Entscheidungen auf diesen Fronten; reine Queue-Refills erfüllen es nicht.
+Main koordiniert größere Fleets und mehrere gleichzeitige Fronten, während verbleibende individuelle Proofs weiter gesammelt werden. Die Acceptance-Checklist bleibt erforderlich für den vollständigen Training-Nachweis, blockiert aber keine sinnvollen Gameplay-Orders. Economy weiter betreiben: Income reinvestieren, Moons/Travel-Routen sichern, Verluste ersetzen, Ships zwischen Front und Repair rotieren und Specials gezielt einsetzen. Late-Game-Training verlangt beobachtete Entscheidungen auf diesen Fronten; reine Queue-Refills erfüllen es nicht.
