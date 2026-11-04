@@ -26,4 +26,13 @@ foreach ($game in @($gameA, $gameB)) {
 }
 Start-Process -FilePath $py -ArgumentList @((Join-Path $PSScriptRoot 'mouse_watchdog.py'), '45', (Join-Path $base "work\watchdog_$Run.log"), $runDir) -WindowStyle Hidden | Out-Null
 $env:ARMADA_TEST_INPUT = '1'
+$env:ARMADA_TEST_NATIVE_MODE_INIT = '1'
 & (Join-Path $PSScriptRoot 'mp_match.ps1') -Run $Run -DumpEvery $DumpEvery -ExitAfter $ExitAfter -AiSlots 0 -GameDirA $gameA -GameDirB $gameB -NativeWindow
+foreach ($tag in @('A','B')) {
+    & $py (Join-Path $PSScriptRoot 'test_window_render.py') $Run $tag --live-only
+    if ($LASTEXITCODE -ne 0) {
+        foreach ($owned in @('A','B')) { & $py (Join-Path $PSScriptRoot 'play_input.py') $Run $owned close }
+        throw "Native-window rendering failed on client $tag; stopped this test run."
+    }
+}
+"native-window rendering checked on both clients: $Run"

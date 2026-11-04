@@ -103,6 +103,10 @@ Tip: `Armada.exe -nointro` skips the intro videos.
   before DirectSound opens and reuse persistent Private-LAN firewall rules on fixed
   game paths. Method, observed builds/combat and limits:
   [`docs/gameplay_validation_2026-11-04.md`](docs/gameplay_validation_2026-11-04.md).
+  That run's 3D output was subsequently found uninitialized. The test proxy now repairs
+  native-window GOG renderer setup and uses the real viewport size. Visible world/HUD,
+  Menu/Return to Game, and a new two-client run with 100 matching dump pairs through
+  step 10,000 are checked: [`rendering report`](docs/window_rendering_2026-11-04.md).
 - **Release tool (v1.2.0):** apply/reapply/restore, unsupported exe, invalid window option,
   mod-library collision, double-click and drag-and-drop checked on copies of the GOG files.
   The production mouse guard is also checked with recording callbacks: a background game
@@ -131,6 +135,7 @@ object that drifted. Please open an issue with both files.
     (`python -m PyInstaller --onefile --console --name Armada_MP_fix release/armada_fix.py`) and writes `SHA256SUMS.txt`
   - `test_sync_instructions.py` – isolated instruction replays (requires `pefile`, `unicorn`)
   - `test_order8.py` – lost-target crash and surviving-branch regression replays
+  - `test_window_render.py` – live native-window device/canvas checks and installed x86 shim replays
   - `test_patcher.py`, `test_cmpdumps.py`, `test_mouse_guard.cmd` – patcher, comparator and
     production background mouse-guard checks
 

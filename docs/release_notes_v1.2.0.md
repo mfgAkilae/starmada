@@ -82,3 +82,16 @@ and 20 matching dump pairs through its configured exit at step 2,000.
 
 These are test-harness improvements; the downloadable v1.2.0 game patch is unchanged.
 [Full method, observations and remaining limits](https://github.com/mfgAkilae/starmada/blob/dd413c3/docs/gameplay_validation_2026-11-04.md).
+
+### Test rendering correction (2026-11-04)
+
+The native-window test setup could run its simulation while the GOG wrapper's D3D9
+device was NULL, leaving an empty lobby background on screen. The earlier `play10`
+and `play11` runs validate replicated simulation, not working 3D output.
+
+The test proxy now initializes the identified GOG wrapper on the menu-to-game transition
+in explicit windowed mode, using the real viewport size. World/HUD presentation and
+Menu/Return to Game were observed working. A new rendered two-client match completed
+10,000 steps with 100 matching dump pairs, ship builds and reciprocal scout damage.
+The production game-patch assets are unchanged.
+[Rendering report](https://github.com/mfgAkilae/starmada/blob/main/docs/window_rendering_2026-11-04.md).

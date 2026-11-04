@@ -1,0 +1,172 @@
+{
+  "date": "2026-11-04",
+  "run": "render_mp1",
+  "machines": 1,
+  "human_slots": 2,
+  "ai_slots": 0,
+  "players": {
+    "A": {
+      "team": 4,
+      "race": "Federation"
+    },
+    "B": {
+      "team": 3,
+      "race": "Federation"
+    }
+  },
+  "comparison": {
+    "pairs": 100,
+    "first_step": 100,
+    "last_step": 10000,
+    "first_difference": null,
+    "normalized_dump_sequence_sha256": {
+      "A": "74b59f7df776cc0edf90899ea61b97114be5547b2a0803fa68e440051b972c2e",
+      "B": "74b59f7df776cc0edf90899ea61b97114be5547b2a0803fa68e440051b972c2e"
+    },
+    "digest_format": "sorted filenames, filename + NUL + normalized Latin-1 lines with LF and final LF"
+  },
+  "renderer_initialization": {
+    "A": {
+      "width": 640,
+      "height": 480,
+      "bpp": 32,
+      "hr": "00000000",
+      "device_created": true,
+      "windowed": true
+    },
+    "B": {
+      "width": 640,
+      "height": 480,
+      "bpp": 32,
+      "hr": "00000000",
+      "device_created": true,
+      "windowed": true
+    }
+  },
+  "live_checks_observed": {
+    "A": {
+      "executed": 3,
+      "passed": 3,
+      "native_fullscreen_flag": 0,
+      "viewport": [
+        640,
+        480
+      ],
+      "window_client": [
+        640,
+        480
+      ]
+    },
+    "B": {
+      "executed": 3,
+      "passed": 3,
+      "native_fullscreen_flag": 0,
+      "viewport": [
+        640,
+        480
+      ],
+      "window_client": [
+        640,
+        480
+      ]
+    }
+  },
+  "live_check_command": "python tools/test_window_render.py render_mp1 <A|B>",
+  "windows_mute_S_OK_count": {
+    "A": 1,
+    "B": 1
+  },
+  "firewall_rule_changes": false,
+  "watchdog_log": [
+    "12:50:01 start clip=(0, 0, 7680, 2160)",
+    "12:54:38 clip=(0, 0, 7680, 2088) not inside an Armada window, ignored",
+    "12:55:29 no Armada.exe for 60 s, done",
+    "12:55:29 end"
+  ],
+  "submitted_commands": {
+    "A": [
+      "network command 644340700 action 1 actor 80008127 target 00000000 team 4 at step 4552",
+      "network command 644341729 action 2 actor 80008128 target 80008089 team 4 at step 4621"
+    ],
+    "B": [
+      "network command 644341204 action 1 actor 80008083 target 00000000 team 3 at step 4578",
+      "network command 644342255 action 2 actor 80008089 target 80008128 team 3 at step 4648"
+    ]
+  },
+  "gameplay": {
+    "first_step": 100,
+    "last_step": 10000,
+    "pairs": 100,
+    "built": [
+      {
+        "id": -2147188438,
+        "kind": "constructionrig",
+        "name": "fconst9",
+        "team": 3,
+        "pos": [
+          5823.324219,
+          58.389832,
+          5437.155273
+        ],
+        "health": 700.0,
+        "max_health": 700.0,
+        "first_step": 8000
+      },
+      {
+        "id": -2147188439,
+        "kind": "constructionrig",
+        "name": "fconst8",
+        "team": 4,
+        "pos": [
+          5959.331055,
+          58.389832,
+          501.368683
+        ],
+        "health": 700.0,
+        "max_health": 700.0,
+        "first_step": 8000
+      }
+    ],
+    "damaged": [
+      {
+        "id": -2147450584,
+        "first_step": 6400,
+        "team": 4,
+        "name": "fscout7",
+        "peak": 100.0,
+        "enemy": "-2147450743",
+        "lowest_health": 22.805696,
+        "last_enemy": "-2147450743",
+        "removed_step": null
+      },
+      {
+        "id": -2147450743,
+        "first_step": 6400,
+        "team": 3,
+        "name": "fscout3",
+        "peak": 100.0,
+        "enemy": "-2147450584",
+        "lowest_health": 24.426395,
+        "last_enemy": "-2147450584",
+        "removed_step": null
+      }
+    ]
+  },
+  "limits": [
+    "one PC, no mixed CPU or mod validation",
+    "scouts damaged each other but both survived step 10000",
+    "older play10/play11 runs validated simulation with uninitialized 3D output"
+  ],
+  "launcher_smoke": {
+    "run": "render_smoke1",
+    "automatic_live_checks": {
+      "A": 1,
+      "B": 1
+    },
+    "live_checks_passed": true,
+    "compared_pairs": 30,
+    "last_step": 3000,
+    "first_difference": null,
+    "firewall_rule_changes": false
+  }
+}

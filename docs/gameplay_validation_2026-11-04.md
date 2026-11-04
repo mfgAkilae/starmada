@@ -1,5 +1,11 @@
 # Active multiplayer validation, 2026-11-04
 
+**Rendering correction:** The subsequent on-screen report established that the native
+test renderer was actually uninitialized, rather than merely absent from screenshots.
+The state comparisons below cover simulation. The repaired visible renderer, menu
+transition checks and a new rendered multiplayer run are documented in
+[`window_rendering_2026-11-04.md`](window_rendering_2026-11-04.md).
+
 Run `play10` used two independently controlled human slots, Borg (A, team 1) and
 Klingon (B, team 3), in a TCP/IP LAN match on one Windows PC. There were no AI
 slots and no `CommandAllShips` simulation injections. Both players built ships,

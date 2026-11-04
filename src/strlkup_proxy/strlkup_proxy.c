@@ -560,6 +560,7 @@ static void install_light_fix(void)
  *   ARMADA_TEST_EXIT_AFTER  terminate the process after N simulation steps
  *   ARMADA_TEST_MULTI       1: allow a second instance (FindWindowA("Armada") returns NULL)
  *   ARMADA_TEST_INPUT       1: enable per-client virtual input and normal network-queue commands
+ *   ARMADA_TEST_NATIVE_MODE_INIT 1: initialize GOG rendering for native-window matches
  *   ARMADA_TEST_INJECT_STEP/_ORDER/_REPEAT  give every ship an order (CommandAllShips) at that
  *                           simulation step and then every _REPEAT steps
  *   ARMADA_TEST_NO_LIGHTFIX 1: leave the light destructors unpatched
@@ -696,6 +697,79 @@ static HRESULT WINAPI test_DirectSoundCreate(const GUID *guid, void **sound, voi
     return g_DirectSoundCreate(guid, sound, outer);
 }
 
+/* Native -window calls RestoreDisplayMode, which destroys GOG's D3D9 facade.
+   Initialize it on the menu -> game transition, before the new game surfaces.
+   The initial desktop-mode bootstrap must retain the original behavior: creating
+   a GPU device there breaks the subsequent Bink/menu transition. */
+static HRESULT __fastcall test_native_mode(char *device, void *unused)
+{
+    typedef HRESULT (WINAPI *restore_fn)(void *);
+    typedef HRESULT (WINAPI *setmode_fn)(void *, DWORD, DWORD, DWORD, DWORD, DWORD);
+    void *draw = *(void **)(device + 0xd4);
+    DWORD *mode = *(DWORD **)(device + 0x3c);
+    char *engine = *(char **)0x6d4aa0;
+    HMODULE wrapper = GetModuleHandleA("ddraw.dll");
+    char ini[MAX_PATH], presentation[24];
+    int i, width, height;
+    HRESULT hr;
+    WORD control;
+    DWORD length;
+    IMAGE_NT_HEADERS *headers;
+    static BOOL saw_menu;
+    (void)unused;
+    if (engine && *(DWORD *)(engine + 0x124) == 3) saw_menu = TRUE;
+    if (!wrapper || !engine || !saw_menu || *(DWORD *)(engine + 0x124) != 2)
+        goto original_restore;
+    headers = (IMAGE_NT_HEADERS *)((BYTE *)wrapper + ((IMAGE_DOS_HEADER *)wrapper)->e_lfanew);
+    if (headers->FileHeader.TimeDateStamp != 0x61dd5c00 || headers->OptionalHeader.SizeOfImage != 0x561000)
+        goto original_restore; /* GOG DirectX 1-7 wrapper 1.1.0.3494 only */
+    length = GetModuleFileNameA(NULL, ini, sizeof(ini));
+    if (!length || length >= MAX_PATH - 12) goto original_restore;
+    for (i = lstrlenA(ini) - 1; i >= 0 && ini[i] != '\\'; i--) {}
+    lstrcpyA(ini + i + 1, "dxcfg.ini");
+    GetPrivateProfileStringA("dxcfg", "presentation", "", presentation, sizeof(presentation), ini);
+    if (lstrcmpiA(presentation, "windowed") != 0) goto original_restore;
+    __asm fnstcw control
+    __asm {
+        mov eax, device
+        fld dword ptr [eax + 0xcc]
+        fistp width
+        fld dword ptr [eax + 0xd0]
+        fistp height
+    }
+    if (width < 1 || height < 1 || width > 8192 || height > 8192) goto original_restore;
+    hr = ((setmode_fn)(*(void ***)draw)[21])(draw, width, height, mode[2], 0, 0);
+    __asm fldcw control
+    log_line("native window renderer %d x %d x %lu hr=%08lx D3D9=%08lx windowed=%lu",
+        width, height, mode[2], hr, *(DWORD *)((BYTE *)wrapper + 0x460724),
+        *(DWORD *)((BYTE *)wrapper + 0x468478));
+    if (SUCCEEDED(hr) && (!*(DWORD *)((BYTE *)wrapper + 0x460724) ||
+        *(DWORD *)((BYTE *)wrapper + 0x468478) != 1)) return E_FAIL;
+    return hr;
+original_restore:
+    ((restore_fn)(*(void ***)draw)[19])(draw);
+    return S_OK; /* the original native branch ignores RestoreDisplayMode's status */
+}
+
+static void install_test_window_renderer(void)
+{
+    static const BYTE expected[12] = {0x8b,0x83,0xd4,0,0,0,0x50,0x8b,0x08,0xff,0x51,0x4c};
+    BYTE *site = (BYTE *)0x5816f4;
+    DWORD protect;
+    int i;
+    if (env_uint("ARMADA_TEST_NATIVE_MODE_INIT") != 1) return;
+    for (i = 0; i < 12; i++) if (site[i] != expected[i]) return;
+    if (!VirtualProtect(site, 12, PAGE_EXECUTE_READWRITE, &protect)) return;
+    for (i = 0; i < 12; i++) site[i] = 0x90;
+    site[0] = 0x8b; site[1] = 0xcb; /* mov ecx,ebx: native renderer */
+    site[2] = 0xe8;
+    *(int *)(site + 3) = (int)((BYTE *)test_native_mode - (site + 7));
+    site[7] = 0x85; site[8] = 0xc0; /* test eax,eax */
+    site[9] = 0x75; site[10] = 0x98; /* jnz 0x581697: original SetDisplayMode error path */
+    VirtualProtect(site, 12, protect, &protect);
+    FlushInstructionCache(GetCurrentProcess(), site, 12);
+}
+
 static void install_test_mute(void)
 {
     DWORD prot;
@@ -786,8 +860,9 @@ static LRESULT test_network_event(LPARAM lp)
     return 1;
 }
 
-/* Native DirectX7 screenshot API. With the GOG wrapper an occluded capture may
-   omit the 3D image; it is diagnostic output, not proof of a rendered game view. */
+/* Native DirectX7 screenshot API. This requires an initialized renderer; the
+   wrapper's readback can have inverted row order. Actual window presentation is
+   checked separately from this diagnostic image. */
 static void capture_game_frame(DWORD seq)
 {
     typedef void *(__cdecl *image_alloc_fn)(unsigned);
@@ -1131,6 +1206,7 @@ static void install_test_hooks(HMODULE exe)
         patch_import(exe, "USER32.dll", "FindWindowA", (void *)local_FindWindowA);
     stay_in_background(exe);
     install_test_mute();
+    install_test_window_renderer();
     install_virtual_input(exe);
     g_cbt = SetWindowsHookExA(WH_CBT, cbt_proc, NULL, GetCurrentThreadId());
     install_dock_counters();

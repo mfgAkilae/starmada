@@ -402,6 +402,16 @@ dump pairs through step 46,000 with no difference. See
 [`gameplay_validation_2026-11-04.md`](gameplay_validation_2026-11-04.md) for the command
 path evidence, Windows mute/firewall defaults, GOG fixture repair and remaining limits.
 
+## Native-window rendering in the test setup
+
+The native-window setup branch at `0x5816f4` calls RestoreDisplayMode. In the GOG
+wrapper this releases the D3D9 device, so a match can advance with no visible world/HUD.
+The test proxy now initializes the identified GOG wrapper in explicit windowed mode
+on the menu-to-game transition, before game surfaces are created, using viewport size.
+The initial bootstrap/menu behavior is preserved. The production proxy is unchanged.
+See [`window_rendering_2026-11-04.md`](window_rendering_2026-11-04.md) for reproduction,
+scope guards, observed menu/resume behavior and the rendered two-client regression run.
+
 ## Open
 
 - A long multiplayer match on two separate PCs.
