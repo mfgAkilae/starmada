@@ -17,7 +17,7 @@ import re
 import time
 
 from late_game_player import Memory
-from play_input import BASE, Input
+from play_input import BASE, Input, KEY
 import probe
 
 # Input.map uses the game's fixed US DirectInput key positions. The test proxy
@@ -90,6 +90,30 @@ class UIPlayer(Input):
 
     def chord(self, keys):
         super().chord([self._game_key(vk) for vk in keys])
+
+    def move_path(self, points):
+        """Queue 2..8 clear ground points in the CURRENT camera via native Tab.
+
+        Caller must select healthy ships, leave submenus, and visually choose a
+        route around obstacles first. Do not pan the camera within the sequence.
+        Input acknowledgements do not establish arrival or safe pathfinding.
+        """
+        if not isinstance(points, (list, tuple)) or not 2 <= len(points) <= 8:
+            raise ValueError('a visible path requires 2..8 ground points')
+        for point in points:
+            if (not isinstance(point, (list, tuple)) or len(point) != 2 or
+                    any(type(value) is not int for value in point) or
+                    not 12 <= point[0] <= 628 or not 24 <= point[1] <= 320):
+                raise ValueError('waypoints must avoid the HUD and camera-scroll edges')
+        self.key(ord('S'))
+        try:
+            self.event(KEY, 9)  # Input.map enter_waypoint: native Tab modifier.
+            for x, y in points:
+                self.click(x, y, right=True)
+        finally:
+            self.event(KEY, 9 | 0x10000)
+        self.note(action='queued_move_path', waypoints=points,
+                  proof='UI acknowledgements only; route/arrival needs observation')
 
     def frame(self, label='state'):
         label = re.sub(r'[^A-Za-z0-9_-]+', '_', label).strip('_')[:60] or 'state'

@@ -458,6 +458,23 @@ record their artifacts before initialization and isolate one owned match.
 The Late-Game validation method and measured gameplay evidence are in
 [`late_game_validation_2026-11-04.md`](late_game_validation_2026-11-04.md).
 
+## Finding 11 – the screen turning off crashes every client (fixed, v1.3.0)
+
+All six clients of the six-player match `agents6_2` crashed at 21:10:27, eight seconds
+after Windows logged the display switching off (Kernel-Power 566, session type 1 → 0;
+the screen-on transitions that evening carry the reason `SessionUnlock`). Direct3D 9
+loses its device then. The GOG wrapper's color-fill routine calls `GetRenderTarget`,
+ignores the failed HRESULT and releases its uninitialized output (dumps at
+`ddraw.dll+0x398c1`/`+0x398c3`, and `Armada.exe+0x183dbd` from the same `Release`).
+The same unchecked block exists five times (RVAs `0x27bab`, `0x2e3de`, `0x3104e`,
+`0x33d1e`, `0x398b6`, one per surface slot). The proxy checks HRESULT and output at all
+five and takes the wrapper's own "no GPU clear" branch target on failure; the wrapper's
+present path already resets a lost device (`TestCooperativeLevel`, RVA `0x20545`).
+The failed restart `agents6_3` (`DDERR_UNSUPPORTEDMODE` in the test-only native mode
+switch) started while the display was off. Details and verification:
+[`gog_render_target_crash_2026-11-04.md`](gog_render_target_crash_2026-11-04.md).
+An actual lock/display-off during a match with the fix is still to be checked by hand.
+
 ## Open
 
 - A long multiplayer match on two separate PCs.

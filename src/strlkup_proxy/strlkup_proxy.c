@@ -20,6 +20,8 @@
  *                    and ClipCursor imports get the same foreground guard
  *                    (guard_ddraw_mouse). Wrapper focus calls cannot reactivate a
  *                    background game and bypass the mouse guard.
+ *                    The known GOG wrapper also skips its render-target clear
+ *                    when GetRenderTarget fails or returns no Surface.
  *   CreateMutexA    The two cursor-rendering Mutexes belong to this process;
  *                    other instances must not share or abandon their ownership.
  *
@@ -498,6 +500,126 @@ static void stay_in_background(HMODULE m)
 }
 #endif
 
+/* GOG DirectX 1-7 wrapper 1.1.0.3494, Surface color fill. GetRenderTarget's
+   HRESULT was ignored and an uninitialized local was passed to Release. Four
+   real late-game crash dumps reached 0x398c1/0x398c3, or the resulting invalid
+   virtual call. The trigger was Windows locking the session (Direct3D 9 loses the
+   device; GetRenderTarget then fails): all six clients of a test match crashed eight
+   seconds after the lock. Keep the successful wrapper path and its reference counts;
+   skip only the optional GPU clear on failure, then retain the CPU fill.
+
+   The same block exists five times (one color-fill routine per surface slot,
+   0x898..0x8a8 of the surface context). Each site gets its own thunk. The thunk
+   copies this/index/output for the original stdcall; its return address is the
+   site + 5 (the sixth replaced byte is a NOP). On failure it adds the distance to
+   the wrapper's own "no GPU clear" target, the destination of the "test ah,0x10;
+   jne" right before the block, which install verifies byte for byte. No absolute
+   code address is embedded, so ASLR and the allocation address do not affect the
+   branch. */
+#define RT_SITES      5
+#define RT_THUNK_SIZE 64
+static const struct { DWORD site, skip; } g_render_target_sites[RT_SITES] = {
+    { 0x27bab, 0x27c6c }, { 0x2e3de, 0x2e49f }, { 0x3104e, 0x3110f },
+    { 0x33d1e, 0x33ddf }, { 0x398b6, 0x39915 }
+};
+static HMODULE g_render_target_module;
+static BYTE *g_render_target_thunk;
+
+/* the wrapper's own skip branch: "test ah,0x10; jne skip" just before the block */
+static BOOL render_target_skip_ok(const BYTE *base, DWORD site, DWORD skip)
+{
+    const BYTE *block = base + site - 0xa;
+    if (block[-2] == 0x75 && block[-5] == 0xf6 && block[-4] == 0xc4 && block[-3] == 0x10)
+        return (DWORD)(block - base) + (DWORD)(LONG)(signed char)block[-1] == skip;
+    if (block[-6] == 0x0f && block[-5] == 0x85 && block[-9] == 0xf6 && block[-8] == 0xc4 &&
+        block[-7] == 0x10)
+        return (DWORD)(block - base) + (DWORD)*(const LONG *)(block - 4) == skip;
+    return FALSE;
+}
+
+static BOOL install_ddraw_render_target_fix(HMODULE module)
+{
+    static const BYTE expected[] = {
+        0x8b,0x11,0x8d,0x44,0x24,0x48,0x50,0x6a,0x00,0x51,
+        0xff,0x92,0x98,0x00,0x00,0x00,0x8b,0x44,0x24,0x48,
+        0x50,0x8b,0x08,0xff,0x51,0x08
+    };
+    static const BYTE tail[] = {
+        0x8b,0x94,0x24,0xe0,0x01,0x00,0x00,0x8b,0x5c,0x24,0x28,
+        0x8b,0x74,0x24,0x34
+    };
+    static const BYTE thunk[] = {
+        0x8b,0x44,0x24,0x0c,                 /* mov eax,[esp+12] */
+        0xc7,0x00,0x00,0x00,0x00,0x00,       /* initialize *output */
+        0xff,0x74,0x24,0x0c,                 /* push output */
+        0xff,0x74,0x24,0x0c,                 /* push index */
+        0xff,0x74,0x24,0x0c,                 /* push this */
+        0xff,0x92,0x98,0x00,0x00,0x00,       /* original GetRenderTarget */
+        0x85,0xc0,0x78,0x09,                 /* test HRESULT; js skip */
+        0x8b,0x4c,0x24,0x0c,0x83,0x39,0x00, /* test *output */
+        0x75,0x07,                           /* non-NULL: normal return */
+        0x81,0x04,0x24,0,0,0,0,              /* skip optional GPU clear (+44) */
+        0xc2,0x0c,0x00                      /* ret 12 */
+    };
+    BYTE *base = (BYTE *)module, *code;
+    IMAGE_NT_HEADERS *nt;
+    DWORD previous, ignored;
+    SIZE_T i, k;
+    BOOL installed = TRUE;
+    if (!module || ((IMAGE_DOS_HEADER *)base)->e_magic != IMAGE_DOS_SIGNATURE)
+        return FALSE;
+    nt = (IMAGE_NT_HEADERS *)(base + ((IMAGE_DOS_HEADER *)base)->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE ||
+        nt->FileHeader.Machine != IMAGE_FILE_MACHINE_I386 ||
+        nt->FileHeader.TimeDateStamp != 0x61dd5c00 ||
+        nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC ||
+        nt->OptionalHeader.SizeOfImage != 0x561000 ||
+        !same(base + 0x39915, (const char *)tail, sizeof(tail)))
+        return FALSE;
+    if (module == g_render_target_module && g_render_target_thunk) {
+        for (k = 0; k < RT_SITES; k++) {
+            BYTE *site = base + g_render_target_sites[k].site;
+            installed = installed && site[0] == 0xe8 && site[5] == 0x90 &&
+                (BYTE *)((DWORD)(ULONG_PTR)(site + 5) + *(DWORD *)(site + 1)) ==
+                    g_render_target_thunk + k * RT_THUNK_SIZE;
+        }
+        if (installed)
+            return TRUE;
+    }
+    /* all sites must match before any of them is changed */
+    for (k = 0; k < RT_SITES; k++)
+        if (!same(base + g_render_target_sites[k].site - 0xa, (const char *)expected, sizeof(expected)) ||
+            !render_target_skip_ok(base, g_render_target_sites[k].site, g_render_target_sites[k].skip))
+            return FALSE;
+    code = (BYTE *)VirtualAlloc(NULL, RT_SITES * RT_THUNK_SIZE, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (!code)
+        return FALSE;
+    for (k = 0; k < RT_SITES; k++) {
+        BYTE *t = code + k * RT_THUNK_SIZE;
+        for (i = 0; i < sizeof(thunk); i++)
+            t[i] = thunk[i];
+        *(DWORD *)(t + 44) = g_render_target_sites[k].skip - (g_render_target_sites[k].site + 5);
+    }
+    if (!VirtualProtect(code, RT_SITES * RT_THUNK_SIZE, PAGE_EXECUTE_READ, &previous)) {
+        VirtualFree(code, 0, MEM_RELEASE);
+        return FALSE;
+    }
+    FlushInstructionCache(GetCurrentProcess(), code, RT_SITES * RT_THUNK_SIZE);
+    for (k = 0; k < RT_SITES; k++) {
+        BYTE *site = base + g_render_target_sites[k].site;
+        if (!VirtualProtect(site, 6, PAGE_EXECUTE_READWRITE, &previous))
+            continue;
+        site[0] = 0xe8;
+        *(DWORD *)(site + 1) = (DWORD)(ULONG_PTR)(code + k * RT_THUNK_SIZE) - (DWORD)(ULONG_PTR)(site + 5);
+        site[5] = 0x90;
+        VirtualProtect(site, 6, previous, &ignored);
+        FlushInstructionCache(GetCurrentProcess(), site, 6);
+    }
+    g_render_target_module = module;
+    g_render_target_thunk = code;
+    return TRUE;
+}
+
 /* Once ddraw.dll is loaded: replace its mouse imports (it calls them for itself and from
    its hooks of the game's imports). */
 static void guard_ddraw_mouse(void)
@@ -506,6 +628,7 @@ static void guard_ddraw_mouse(void)
     if (g_ddraw_mouse_done || (dd = GetModuleHandleA("ddraw.dll")) == NULL)
         return;
     g_ddraw_mouse_done = TRUE;
+    install_ddraw_render_target_fix(dd);
     patch_import(dd, "USER32.dll", "SetCursorPos", (void *)local_SetCursorPos);
     patch_import(dd, "USER32.dll", "ClipCursor", (void *)local_ClipCursor);
     patch_import(dd, "USER32.dll", "SetForegroundWindow", (void *)local_SetForegroundWindow);
@@ -1344,4 +1467,4 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
 }
 
 /* Marker export so the installer can recognise this proxy. */
-__declspec(dllexport) const char ArmadaCursorFix[] = "ArmadaCursorFix 1.3.0 (cursor, ddraw mapping and graphics Mutex isolation, light lifetime, window close, mouse and focus guards)";
+__declspec(dllexport) const char ArmadaCursorFix[] = "ArmadaCursorFix 1.3.0 (cursor, ddraw mapping and graphics Mutex isolation, light lifetime, window close, mouse and focus guards, lost-device render target guard)";

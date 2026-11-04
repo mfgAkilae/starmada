@@ -23,6 +23,7 @@ No game files are included. You need your own copy of the game.
 | Crash "pure virtual function call" during a match (v1.1.0) | The loading screen leaves hundreds of references to its deleted light in the render engine's light list; the engine then calls and writes into the dead object | A destroyed light leaves the light list |
 | All players crash at the same moment during a match (v1.2.0) | A ship whose target of order 8 no longer exists reads through a null pointer; the simulation is the same on every PC | The handler returns, as it already does on its other branch |
 | Graphics stall with multiple Armada instances (v1.3.0) | Two named graphics Mutexes are shared across Processes; failed cursor-renderer acquires can retain ownership | PID-scoped names and signature-checked cleanup of acquired graphics Locks |
+| Every player's game crashes when the screen turns off or the PC is locked during a match (v1.3.0) | Direct3D 9 loses the device; the GOG DirectX wrapper's color-fill routines then use an uninitialized surface pointer after `GetRenderTarget` fails | The known wrapper initializes and checks the output at all five color-fill sites and skips the optional GPU clear on failure |
 | The mouse is caught in the game window, also when the window is in the background (v1.2.0) | GOG's wrapper confines the cursor to the window (`ClipCursor`) to emulate fullscreen, and the game re-centres it during a match | Both only while the game window is in front; Alt+Tab releases the mouse |
 | Closing the window (X, Alt+F4) leaves the game running invisibly (v1.1.0) | The game window ignores `WM_CLOSE`; Windows destroys the window and the game runs on without it | The game ends when its window is closed |
 | The game changes the mouse arrow of the whole desktop, and keeps it after a crash | Armada shows its cursor with `SetSystemCursor` | The cursor applies to the game's windows only |
@@ -70,6 +71,8 @@ Tip: `Armada.exe -nointro` skips the intro videos.
 - v1.3.0 changes the runtime proxy only; the v1.2.0 `Armada.exe` hash and `v1.2s` menu label
   remain unchanged. The graphics wait Hook requires the exact GOG instruction signature.
   Renderer-replacing mods and extra aliases of the graphics Mutex Handles need separate tests.
+  The render-target Guard also requires the known GOG wrapper build and exact instruction
+  signatures; other renderer builds are left unchanged.
 - A patched and an unpatched `Armada.exe` must not play together: the patch changes when the
   synchronized random generator is used.
 

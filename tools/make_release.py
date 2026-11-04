@@ -30,7 +30,8 @@ def embed(dll):
     b64 = base64.b64encode(dll).decode()
     lines = '\n'.join(b64[i:i + 100] for i in range(0, len(b64), 100))
     src = open(TOOL, encoding='utf-8').read()
-    new, n = re.subn(r"^PROXY_DLL_B64 = (None|'''[^']*''')$",
+    # accepts None, the '''...''' block and a parenthesized string tuple; writes the block
+    new, n = re.subn(r"^PROXY_DLL_B64 = (None|'''[^']*'''|\((?:\s*'[^']*')*\s*\))$",
                      lambda m: "PROXY_DLL_B64 = '''\n" + lines + "\n'''", src, flags=re.M)
     if n != 1:
         raise SystemExit('PROXY_DLL_B64 not found in ' + TOOL)
