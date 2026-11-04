@@ -3,7 +3,7 @@
  *
  * The proxy forwards the exports of the original Strlkup.dll (renamed to
  * Strlkup_orig.dll; linker pragmas below keep the original ordinals) and patches
- * four imports of Armada.exe when it loads:
+ * selected imports of Armada.exe when it loads:
  *
  *   SetSystemCursor  Armada shows its mouse cursors by replacing the system-wide
  *                    arrow cursor (SetSystemCursor(hcur, OCR_NORMAL)). In a window
@@ -20,6 +20,8 @@
  *                    and ClipCursor imports get the same foreground guard
  *                    (guard_ddraw_mouse). Wrapper focus calls cannot reactivate a
  *                    background game and bypass the mouse guard.
+ *   CreateMutexA    The two cursor-rendering Mutexes belong to this process;
+ *                    other instances must not share or abandon their ownership.
  *
  * For the GOG 1.2 Armada.exe (checked by code signature) it also redirects the
  * ST3D light destructors so that a destroyed light leaves the render engine's
@@ -48,6 +50,53 @@
 
 static HCURSOR g_cursor;
 static CRITICAL_SECTION g_lock;
+static HANDLE g_graphics_offscreen_mutex, g_graphics_onscreen_mutex;
+static void *g_cursor_second_wait_return;
+
+/* These Mutexes synchronize the game's own drawing Threads. Their original
+   fixed names also join unrelated Armada/Storm3D instances in the same Windows
+   Session. A failed second acquire or an abandoned Mutex can then stall every
+   instance. Keep intra-process sharing, with no cross-process graphics state. */
+static HANDLE WINAPI local_CreateMutexA(LPSECURITY_ATTRIBUTES attributes, BOOL owner, LPCSTR name)
+{
+    char scoped[96];
+    HANDLE mutex;
+    BOOL offscreen = name && lstrcmpA(name, "m_mutex_draw_cursor_offscreen") == 0;
+    BOOL onscreen = name && lstrcmpA(name, "m_mutex_draw_cursor_onscreen") == 0;
+    if (offscreen || onscreen) {
+        wsprintfA(scoped, "%s.armada.%lu", name, GetCurrentProcessId());
+        name = scoped;
+    }
+    mutex = CreateMutexA(attributes, owner, name);
+    if (mutex) {
+        if (offscreen) g_graphics_offscreen_mutex = mutex;
+        if (onscreen) g_graphics_onscreen_mutex = mutex;
+    }
+    return mutex;
+}
+
+static DWORD complete_graphics_wait(HANDLE waited, DWORD result, BOOL second_acquire)
+{
+    DWORD error;
+    BOOL known = waited && (waited == g_graphics_offscreen_mutex || waited == g_graphics_onscreen_mutex);
+    if (!known || result == WAIT_OBJECT_0)
+        return result;
+    error = GetLastError();
+    if (result == WAIT_ABANDONED)
+        ReleaseMutex(waited);
+    if (second_acquire && waited == g_graphics_onscreen_mutex && g_graphics_offscreen_mutex)
+        ReleaseMutex(g_graphics_offscreen_mutex);
+    SetLastError(error);
+    return result;
+}
+
+static DWORD WINAPI local_WaitForSingleObject(HANDLE waited, DWORD milliseconds)
+{
+    void *caller = _ReturnAddress();
+    DWORD result = WaitForSingleObject(waited, milliseconds);
+    return complete_graphics_wait(waited, result,
+                                  g_cursor_second_wait_return && caller == g_cursor_second_wait_return);
+}
 
 static BOOL CALLBACK set_class_cursor(HWND hwnd, LPARAM lparam)
 {
@@ -122,6 +171,36 @@ static BOOL patch_import(HMODULE module, const char *dll, const char *name, void
         }
     }
     return done;
+}
+
+static void install_graphics_wait_fix(HMODULE exe)
+{
+    static const BYTE expected[] = {
+        0x8b,0x0d,0xa0,0x4a,0x6d,0x00,0x8b,0x3d,0x64,0x7b,0x6d,0x00,
+        0x68,0xe8,0x03,0x00,0x00,0x8b,0x91,0xa4,0x00,0x00,0x00,0x52,
+        0xff,0xd7,0x85,0xc0,0x74,0x0c,0x5f,0x5e,0xb8,0x01,0x00,0x00,
+        0x00,0x5b,0x8b,0xe5,0x5d,0xc3,0xa1,0xa0,0x4a,0x6d,0x00,0x68,
+        0xe8,0x03,0x00,0x00,0x8b,0x88,0xa8,0x00,0x00,0x00,0x51,0xff,
+        0xd7,0x85,0xc0,0x74,0x0c,0x5f,0x5e,0xb8,0x01,0x00,0x00,0x00,
+        0x5b,0x8b,0xe5,0x5d,0xc3
+    };
+    const BYTE *site = (const BYTE *)0x583325;
+    MEMORY_BASIC_INFORMATION region;
+    SIZE_T offset, i;
+    if (VirtualQuery(site, &region, sizeof(region)) != sizeof(region) ||
+        region.State != MEM_COMMIT || region.Type != MEM_IMAGE || region.AllocationBase != exe ||
+        (region.Protect & (PAGE_GUARD | PAGE_NOACCESS)) ||
+        !(region.Protect & (PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY |
+                            PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)))
+        return;
+    offset = (SIZE_T)site - (SIZE_T)region.BaseAddress;
+    if (offset > region.RegionSize || sizeof(expected) > region.RegionSize - offset)
+        return;
+    for (i = 0; i < sizeof(expected); i++)
+        if (site[i] != expected[i])
+            return;
+    if (patch_import(exe, "KERNEL32.dll", "WaitForSingleObject", (void *)local_WaitForSingleObject))
+        g_cursor_second_wait_return = (void *)0x583362;
 }
 
 /*
@@ -997,11 +1076,11 @@ static BOOL test_input_event(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         g_virtual_x = (int)(short)LOWORD(lp) * 131072 / 640 - 65536;
         g_virtual_y = (int)(short)HIWORD(lp) * 131072 / 480 - 65536;
     } else if (msg == INPUT_BUTTON) {
-        /* Poll uses bits 0/1 for left/right, as the original mouse device does. */
+        /* Stock WM_LBUTTONDOWN sets 1, WM_MBUTTONDOWN 2, WM_RBUTTONDOWN 4. */
         if (lp == 1) g_virtual_buttons |= 1;
         if (lp == 2) g_virtual_buttons &= ~1u;
-        if (lp == 3) g_virtual_buttons |= 2;
-        if (lp == 4) g_virtual_buttons &= ~2u;
+        if (lp == 3) g_virtual_buttons |= 4;
+        if (lp == 4) g_virtual_buttons &= ~4u;
     } else if (msg == INPUT_KEY) {
         vk = LOWORD(lp);
         if (vk < 256) {
@@ -1053,6 +1132,9 @@ static void dump_state(unsigned step)
         return;
     f_printf(f, "step %u synced_rng %08lx table_index %lu\n", step,
              *(DWORD *)0x67dc98, *(DWORD *)0x67dc9c);
+    /* Original simulation milliseconds, without changing the x87 state. */
+    f_printf(f, "simulation_seconds %lu.%03lu tick %lu\n", *(DWORD *)0x67dcb8 / 1000,
+             *(DWORD *)0x67dcb8 % 1000, *(DWORD *)0x67dcb0);
     f_printf(f, "docking_angle_draws %ld %ld %ld order8_lost_target %ld local_rng %08lx\n", g_dock_count[0],
              g_dock_count[1], g_dock_count[2], g_o8_count, *(DWORD *)0x67dca4);
     ((dump_fn)0x46f190)(f);
@@ -1247,6 +1329,8 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         InitializeCriticalSection(&g_lock);
         patch_import(exe, "USER32.dll", "SetSystemCursor", (void *)local_SetSystemCursor);
         patch_import(exe, "KERNEL32.dll", "LoadLibraryA", (void *)local_LoadLibraryA);
+        patch_import(exe, "KERNEL32.dll", "CreateMutexA", (void *)local_CreateMutexA);
+        install_graphics_wait_fix(exe);
         patch_import(exe, "USER32.dll", "RegisterClassA", (void *)local_RegisterClassA);
         patch_import(exe, "USER32.dll", "SetCursorPos", (void *)local_SetCursorPos);
         g_main_thread = GetCurrentThreadId();
@@ -1260,4 +1344,4 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
 }
 
 /* Marker export so the installer can recognise this proxy. */
-__declspec(dllexport) const char ArmadaCursorFix[] = "ArmadaCursorFix 1.2.0 (cursor, ddraw mapping isolation, light lifetime, window close, mouse and focus guards)";
+__declspec(dllexport) const char ArmadaCursorFix[] = "ArmadaCursorFix 1.3.0 (cursor, ddraw mapping and graphics Mutex isolation, light lifetime, window close, mouse and focus guards)";

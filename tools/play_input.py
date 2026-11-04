@@ -22,6 +22,7 @@ import probe
 BASE = Path(__file__).resolve().parents[1]
 ENABLE, MOVE, BUTTON, KEY = 0x8410, 0x8411, 0x8412, 0x8413
 CAPTURE = 0x8414
+_network_sequence = (time.time_ns() // 1000000) & 0x7fffffff
 
 
 class Input:
@@ -77,11 +78,15 @@ class Input:
 
     def command(self, action, actor, target=0, name='', position=(0, 0, 0)):
         """One command through this player's normal multiplayer output queue."""
+        global _network_sequence
         if len(name.encode('ascii')) > 8:
             raise ValueError('ODF basename must fit the native eight-byte command field')
         class CopyData(ctypes.Structure):
             _fields_ = [('dwData', ctypes.c_size_t), ('cbData', wt.DWORD), ('lpData', ctypes.c_void_p)]
-        seq = int(time.time_ns() // 1000000) & 0x7fffffff
+        # Distinct orders can arrive within the same Windows clock tick. Only
+        # retries of this order may share a sequence (the proxy deduplicates it).
+        _network_sequence = ((_network_sequence + 1) & 0x7fffffff) or 1
+        seq = _network_sequence
         raw = ctypes.create_string_buffer(struct.pack('<IIII8sfff', seq, action,
             actor & 0xffffffff, target & 0xffffffff, name.encode('ascii'), *position))
         copy = CopyData(0x41524d44, 36, ctypes.cast(raw, ctypes.c_void_p))
@@ -101,7 +106,7 @@ class Input:
             time.sleep(0.03)
         raise RuntimeError('game did not collect this network command')
 
-    def shot(self, path):
+    def shot(self, path, flip_y=False):
         from PIL import Image
         seq = int(time.time() * 1000) & 0x7fffffff
         source = self.diag.parent / f'frame_{seq}.bmp'
@@ -110,7 +115,10 @@ class Input:
         while time.monotonic() < deadline:
             if source.exists() and f'capture {seq}:' in self.diag.read_text(encoding='latin1'):
                 try:
-                    Image.open(source).convert('RGB').save(path)
+                    frame = Image.open(source).convert('RGB')
+                    if flip_y:
+                        frame = frame.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+                    frame.save(path)
                     print('captured native game snapshot', path)
                     return
                 except OSError:

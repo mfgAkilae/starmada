@@ -1,0 +1,232 @@
+{
+  "checkpoint": {
+    "latest": {
+      "active_battle_clusters": 5,
+      "active_firing_ships": 14,
+      "combat_ships": 190,
+      "damaged_combat_ships": 45,
+      "simulation_seconds": 2588.093,
+      "step": 172000,
+      "teams": {
+        "1": {
+          "combat_ships": 12,
+          "objects": 48
+        },
+        "2": {
+          "combat_ships": 16,
+          "objects": 54
+        },
+        "3": {
+          "combat_ships": 19,
+          "objects": 53
+        },
+        "4": {
+          "combat_ships": 13,
+          "objects": 44
+        },
+        "5": {
+          "combat_ships": 55,
+          "objects": 68
+        },
+        "6": {
+          "combat_ships": 17,
+          "objects": 47
+        },
+        "7": {
+          "combat_ships": 38,
+          "objects": 44
+        },
+        "8": {
+          "combat_ships": 20,
+          "objects": 52
+        }
+      },
+      "tick": 172002,
+      "weapon_instances": 904
+    },
+    "metrics": {
+      "conditions": {
+        "duration": false,
+        "parallel_combat": false,
+        "sustained_fleet": false
+      },
+      "criteria": {
+        "late_start_seconds": 3600,
+        "max_gap_seconds": 60,
+        "min_battle_clusters": 3,
+        "min_combat_ships": 200,
+        "min_fleet_seconds": 600,
+        "min_parallel_seconds": 300,
+        "min_simulation_seconds": 5400
+      },
+      "first_simulation_seconds": 17.792,
+      "gaps_over_maximum": 0,
+      "last_simulation_seconds": 2588.093,
+      "last_step": 172000,
+      "longest_fleet_seconds": 0,
+      "observed_seconds": 2570.301,
+      "pairs": 172,
+      "parallel_combat_seconds": 0,
+      "passed": false,
+      "peak_battle_clusters": 7,
+      "peak_combat_ships": 196
+    },
+    "state": "observing",
+    "wall_time": "2026-11-04T15:17:38.324449+00:00"
+  },
+  "firewall": {
+    "changed": false,
+    "ok": true,
+    "rules": [
+      {
+        "profile": "Private",
+        "program": "E:\\dev\\starmada\\work\\play_clients\\live\\A\\Armada.exe",
+        "remote": "LocalSubnet",
+        "rule": "Codex.Armada.LAN.50E961AB0379C579",
+        "verified": true
+      },
+      {
+        "profile": "Private",
+        "program": "E:\\dev\\starmada\\work\\play_clients\\live\\B\\Armada.exe",
+        "remote": "LocalSubnet",
+        "rule": "Codex.Armada.LAN.12B6EB9E80ED2647",
+        "verified": true
+      }
+    ]
+  },
+  "limits": [
+    "UI validation still running; not a passing Late-Game gate",
+    "One PC and CPU; no fan-project validation"
+  ],
+  "production_dll_sha256": "dc05f3090816ce804d5eb95b6fd9bffd813c0408f4b16f039713efdff7a92163",
+  "recorded_utc": "2026-11-04T15:17:42.706026+00:00",
+  "run": "ui_stress2",
+  "runtime_imports_and_mutexes": [
+    {
+      "import_name": "CreateMutexA",
+      "in_proxy": true,
+      "pid": 36280,
+      "slot": "0x6d7b5c",
+      "tag": "A",
+      "target": "0x6b911fe0"
+    },
+    {
+      "import_name": "WaitForSingleObject",
+      "in_proxy": true,
+      "pid": 36280,
+      "slot": "0x6d7b64",
+      "tag": "A",
+      "target": "0x6b912520"
+    },
+    {
+      "handle": "0x2f0",
+      "kind": "Mutant",
+      "name": "\\Sessions\\1\\BaseNamedObjects\\m_mutex_draw_cursor_offscreen.armada.36280",
+      "offset": "0xa4",
+      "tag": "A"
+    },
+    {
+      "handle": "0x268",
+      "kind": "Mutant",
+      "name": "\\Sessions\\1\\BaseNamedObjects\\m_mutex_draw_cursor_onscreen.armada.36280",
+      "offset": "0xa8",
+      "tag": "A"
+    },
+    {
+      "import_name": "CreateMutexA",
+      "in_proxy": true,
+      "pid": 76612,
+      "slot": "0x6d7b5c",
+      "tag": "B",
+      "target": "0x6b7e1fe0"
+    },
+    {
+      "import_name": "WaitForSingleObject",
+      "in_proxy": true,
+      "pid": 76612,
+      "slot": "0x6d7b64",
+      "tag": "B",
+      "target": "0x6b7e2520"
+    },
+    {
+      "handle": "0x2cc",
+      "kind": "Mutant",
+      "name": "\\Sessions\\1\\BaseNamedObjects\\m_mutex_draw_cursor_offscreen.armada.76612",
+      "offset": "0xa4",
+      "tag": "B"
+    },
+    {
+      "handle": "0x2d8",
+      "kind": "Mutant",
+      "name": "\\Sessions\\1\\BaseNamedObjects\\m_mutex_draw_cursor_onscreen.armada.76612",
+      "offset": "0xa8",
+      "tag": "B"
+    }
+  ],
+  "scenario": {
+    "crew": 99999,
+    "dilithium": 1000000,
+    "fixture": "live",
+    "hard_ai": 6,
+    "human_clients": 2,
+    "infinite_moons": true,
+    "map": "8open.bzn",
+    "officers": 999,
+    "selected_indices": {
+      "2097": 0,
+      "2098": 0,
+      "2113": 3,
+      "2114": 3,
+      "2115": 3,
+      "2116": 3,
+      "2117": 3,
+      "2118": 3,
+      "2119": 0,
+      "2121": 0,
+      "2122": 1,
+      "2123": 2,
+      "2124": 3,
+      "2125": 4,
+      "2126": 5,
+      "2127": 6,
+      "2128": 7,
+      "2136": 0,
+      "2140": 2,
+      "2142": 4,
+      "2143": 4,
+      "2144": 4
+    },
+    "separate_alliances": true,
+    "stock_tech": true,
+    "stock_units": true
+  },
+  "schema": 1,
+  "stress_fixture": {
+    "clients": {
+      "A": {
+        "label_map_after_sha256": "392c7f933268994fc619e896c3b2202c63e27525703cd6afec41873771b66c74",
+        "label_map_backup": "A/label.map.stress-backup",
+        "label_map_before_sha256": "cb57f5a9b7c48e921d94408ed8cedc370d45cccc664e3596307510b896b3fb14",
+        "production_exe_sha256": "6b3676a95607e5b3b2ccc1ca7272aa9a8af2d0bffeb4da1e7b7f38ac7ff7a9d1"
+      },
+      "B": {
+        "label_map_after_sha256": "392c7f933268994fc619e896c3b2202c63e27525703cd6afec41873771b66c74",
+        "label_map_backup": "B/label.map.stress-backup",
+        "label_map_before_sha256": "cb57f5a9b7c48e921d94408ed8cedc370d45cccc664e3596307510b896b3fb14",
+        "production_exe_sha256": "6b3676a95607e5b3b2ccc1ca7272aa9a8af2d0bffeb4da1e7b7f38ac7ff7a9d1"
+      }
+    },
+    "created_utc": "2026-11-04T14:25:04.326639+00:00",
+    "fixture": "live",
+    "preparation": "tools/prepare_play_test.py",
+    "schema": 1,
+    "source": "work/gog_repaired",
+    "stress_delta": {
+      "activation": "Select the fifth starting-Dilithium option in the host lobby",
+      "configured_value": 1000000,
+      "file": "label.map",
+      "key": "sd_value_5",
+      "stock_value": 10000
+    }
+  }
+}

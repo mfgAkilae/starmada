@@ -412,6 +412,50 @@ The initial bootstrap/menu behavior is preserved. The production proxy is unchan
 See [`window_rendering_2026-11-04.md`](window_rendering_2026-11-04.md) for reproduction,
 scope guards, observed menu/resume behavior and the rendered two-client regression run.
 
+## 9. Shared graphics Mutexes and failed-acquire ownership
+
+The GOG executable creates `m_mutex_draw_cursor_offscreen` and
+`m_mutex_draw_cursor_onscreen` with `CreateMutexA(NULL, FALSE, name)` around
+`0x588f62` and `0x588fab`. Handles live at render-engine offsets `+0xa4` and `+0xa8`.
+Live inspection of both `late3` clients showed the same Windows object names in
+`\\Sessions\\1\\BaseNamedObjects`. During the stall, their main Threads waited
+in the corresponding rendering paths; simulation and rendered-frame counters
+advanced only about once per two wall seconds. No native out-of-sync report was
+observed. This is evidence of a graphics stall, not an OOS reproduction.
+
+`RefreshDisplay` (`0x581fb0`) and the cursor paths (`0x582f10`, `0x583280`) accept
+only `WAIT_OBJECT_0`. Windows transfers ownership on `WAIT_ABANDONED` too, so the
+original nonzero-return branches leak that ownership. The double-acquire path
+first owns Offscreen at `0x58333d`, then waits on Onscreen at `0x583360` (`FF D7`,
+return address `0x583362`). Its failure return at `0x583366` also skips releasing
+the already-owned Offscreen Mutex.
+
+The v1.3 proxy scopes only those two exact names to `.armada.<PID>`. A separate
+77-byte signature check over `0x583325..0x583371`, bounded to readable committed
+image memory belonging to the executable, enables the Wait import Hook. It
+releases abandoned ownership and the failed second-acquire's Offscreen ownership
+once, retaining the native failure result and LastError. Successful waits and
+unrelated Handles retain their original behavior. No simulation code changes.
+
+Native tests require original-name failure (exit 42), original-wait failure
+(exit 44), then fixed success (exit 0). Worker Threads probe actual ownership;
+tests cover recursive acquisition, abandoned first/second acquires, timeout,
+invalid Handles, original error preservation, actual wrapper ReturnAddress
+selection and negative signature gating. Runtime `ui_stress2` inspection confirms
+both imports point into the loaded proxy and both client names have distinct PID
+suffixes. The production DLL is embedded byte-for-byte in the release patcher.
+
+A bounded audit of 27 shipped GOG EXE/DLL/DRV/OCX files found these literals only
+in Armada's render-engine constructor, and no other shipped consumer opening
+them by name. Data-only mods keep their formats. Custom renderer modules and
+multiple engine/Handle aliases are outside that audit: the cleanup tracks the
+latest created Handle for each of the two names. Four concurrent test clients
+also encountered GOG display-initialization failures despite Mutex isolation;
+the launcher now permits only one test match at a time.
+
+The Late-Game validation method and measured gameplay evidence are in
+[`late_game_validation_2026-11-04.md`](late_game_validation_2026-11-04.md).
+
 ## Open
 
 - A long multiplayer match on two separate PCs.
