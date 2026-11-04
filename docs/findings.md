@@ -475,6 +475,17 @@ switch) started while the display was off. Details and verification:
 [`gog_render_target_crash_2026-11-04.md`](gog_render_target_crash_2026-11-04.md).
 An actual lock/display-off during a match with the fix is still to be checked by hand.
 
+## Further readback failure paths (v1.3.1)
+
+The two remaining unchecked `GetRenderTarget` outputs in the known GOG wrapper
+(RVAs `0x2b736`, `0x36d3f`) also reproduce invalid Release calls. Separate Guards
+restore Dirty, preserve recursive CS ownership and return `DDERR_SURFACELOST`.
+Native checks pass 144 cases per mapping, including relocation, and independent
+cleanup/Payload review found no blocking issue. Full GPU readback, Caller-Recovery
+and six-player Late-Game coverage remain open. Current initialization failures
+also reproduce outside Armada; no speculative driver or global overlay change is
+shipped. [Details](gog_renderer_followups_2026-11-04.md).
+
 ## Open
 
 - A long multiplayer match on two separate PCs.

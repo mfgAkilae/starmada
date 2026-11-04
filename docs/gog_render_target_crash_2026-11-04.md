@@ -55,11 +55,15 @@ checks `TestCooperativeLevel` (`D3DERR_DEVICELOST` waits, `D3DERR_DEVICENOTRESET
 releases its resources and resets the device, around RVA `0x20545`), so after the
 unlock it can render again once the color-fill path no longer crashes.
 
-The failed restart `agents6_3` fits the same cause: the display went off again at
-21:53:11 and stayed off, and the clients started at 21:59 reported
+The failed restart `agents6_3` followed another display-off event at 21:53:11,
+and the clients started at 21:59 reported
 `hr=8876024e` (`DDERR_UNSUPPORTEDMODE`) for the test-only native-window mode switch,
 followed by four crashes at `Armada.exe+0x18207e`. That path exists only in the test
-proxy (`ARMADA_TEST_NATIVE_MODE_INIT`). Microsoft documents failure returns for
+proxy (`ARMADA_TEST_NATIVE_MODE_INIT`). A later restart, `agents6_4`, reproduced
+four initialization failures after the user confirmed an active display while two
+clients initialized successfully. The cause of those startup failures is still
+open; see the [renderer follow-ups](gog_renderer_followups_2026-11-04.md).
+Microsoft documents failure returns for
 [GetRenderTarget](https://learn.microsoft.com/en-us/windows/win32/api/d3d9/nf-d3d9-idirect3ddevice9-getrendertarget)
 and requires the reference returned on success to be released.
 

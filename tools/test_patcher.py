@@ -91,6 +91,24 @@ class Patcher(unittest.TestCase):
         for name, data in self.originals.items():
             self.assertEqual(hashlib.sha256((self.game / name).read_bytes()).hexdigest(), hashlib.sha256(data).hexdigest())
 
+    def test_upgrade_from_v130_updates_proxy_only(self):
+        root = Path(__file__).resolve().parents[1]
+        old = subprocess.run(['git', 'show', 'v1.3.0:release/armada_fix.py'], cwd=root,
+                             capture_output=True, check=True).stdout
+        previous = self.game / 'previous_tool.py'
+        previous.write_bytes(old)
+        subprocess.run([sys.executable, str(previous), 'apply', str(self.game), '--window', 'native'],
+                       capture_output=True, check=True, timeout=45)
+        old_proxy = (self.game / 'Strlkup.dll').read_bytes()
+        before = {p.name: p.read_bytes() for p in self.game.iterdir() if p.name != 'Strlkup.dll'}
+        self.run_tool('apply', self.game, '--window', 'native')
+        self.assertNotEqual((self.game / 'Strlkup.dll').read_bytes(), old_proxy)
+        self.assertEqual({p.name: p.read_bytes() for p in self.game.iterdir() if p.name != 'Strlkup.dll'}, before)
+        self.assertEqual(hashlib.sha256((self.game / 'Armada.exe').read_bytes()).hexdigest(), EXPECTED)
+        self.run_tool('restore', self.game)
+        for name, data in self.originals.items():
+            self.assertEqual((self.game / name).read_bytes(), data)
+
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__)

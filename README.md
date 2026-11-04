@@ -24,6 +24,7 @@ No game files are included. You need your own copy of the game.
 | All players crash at the same moment during a match (v1.2.0) | A ship whose target of order 8 no longer exists reads through a null pointer; the simulation is the same on every PC | The handler returns, as it already does on its other branch |
 | Graphics stall with multiple Armada instances (v1.3.0) | Two named graphics Mutexes are shared across Processes; failed cursor-renderer acquires can retain ownership | PID-scoped names and signature-checked cleanup of acquired graphics Locks |
 | Every player's game crashes when the screen turns off or the PC is locked during a match (v1.3.0) | Direct3D 9 loses the device; the GOG DirectX wrapper's color-fill routines then use an uninitialized surface pointer after `GetRenderTarget` fails | The known wrapper initializes and checks the output at all five color-fill sites and skips the optional GPU clear on failure |
+| Another failed render-target lookup can crash a depth readback (v1.3.1) | Two Surface Lock paths also release an unchecked GetRenderTarget output | Guard both outputs, preserve dirty state and CS ownership, and return SurfaceLost on failure |
 | The mouse is caught in the game window, also when the window is in the background (v1.2.0) | GOG's wrapper confines the cursor to the window (`ClipCursor`) to emulate fullscreen, and the game re-centres it during a match | Both only while the game window is in front; Alt+Tab releases the mouse |
 | Closing the window (X, Alt+F4) leaves the game running invisibly (v1.1.0) | The game window ignores `WM_CLOSE`; Windows destroys the window and the game runs on without it | The game ends when its window is closed |
 | The game changes the mouse arrow of the whole desktop, and keeps it after a crash | Armada shows its cursor with `SetSystemCursor` | The cursor applies to the game's windows only |
@@ -68,7 +69,7 @@ Tip: `Armada.exe -nointro` skips the intro videos.
   `Armada.exe` does not contain the expected code, the tool stops and changes nothing.
 - Invalid window options and a collision with an existing `Strlkup_orig.dll` are rejected
   before any game file changes. `apply` is idempotent; `restore` recovers the original files.
-- v1.3.0 changes the runtime proxy only; the v1.2.0 `Armada.exe` hash and `v1.2s` menu label
+- v1.3.x changes the runtime proxy only; the v1.2.0 `Armada.exe` hash and `v1.2s` menu label
   remain unchanged. The graphics wait Hook requires the exact GOG instruction signature.
   Renderer-replacing mods and extra aliases of the graphics Mutex Handles need separate tests.
   The render-target Guard also requires the known GOG wrapper build and exact instruction
@@ -125,6 +126,11 @@ Tip: `Armada.exe -nointro` skips the intro videos.
   `WAIT_FAILED`, LastError and unrelated-Mutex passthrough. Both live clients have distinct
   PID-scoped Mutexes and installed proxy imports. Installation checks pass for Python and
   the packaged EXE, including an upgrade from the released v1.2.0 EXE.
+- **Depth-readback failure paths (v1.3.1):** 144 native cases per mapping, including
+  a relocated module, preserve caller ABI, recursive CS ownership and Surface state.
+  Original failure is reproduced first. Full GPU readback and Caller-Recovery remain
+  unverified; current multi-Process D3D9 startup failures are separate from the fix.
+  [Evidence and limits](docs/gog_renderer_followups_2026-11-04.md).
 - **Late-Game coverage:** earlier short/scripted runs cannot establish Late-Game stability.
   A measured gate now requires 90 observed simulation minutes, 200 simultaneously alive
   stock combat ships sustained for ten minutes after the first hour, and overlapping

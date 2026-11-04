@@ -38,6 +38,7 @@
 #ifdef ARMADA_TESTHOOKS
 #include <mmdeviceapi.h>
 #include <audiopolicy.h>
+static void install_test_d3d_trace(HMODULE wrapper);
 #endif
 
 #ifndef OCR_NORMAL
@@ -503,9 +504,9 @@ static void stay_in_background(HMODULE m)
 /* GOG DirectX 1-7 wrapper 1.1.0.3494, Surface color fill. GetRenderTarget's
    HRESULT was ignored and an uninitialized local was passed to Release. Four
    real late-game crash dumps reached 0x398c1/0x398c3, or the resulting invalid
-   virtual call. The trigger was Windows locking the session (Direct3D 9 loses the
-   device; GetRenderTarget then fails): all six clients of a test match crashed eight
-   seconds after the lock. Keep the successful wrapper path and its reference counts;
+   virtual call. Windows recorded display-off before the crashes (Direct3D 9 loses
+   the device; GetRenderTarget then fails): all six clients of a test match crashed
+   eight seconds later. Keep the successful wrapper path and its reference counts;
    skip only the optional GPU clear on failure, then retain the CPU fill.
 
    The same block exists five times (one color-fill routine per surface slot,
@@ -620,6 +621,124 @@ static BOOL install_ddraw_render_target_fix(HMODULE module)
     return TRUE;
 }
 
+/* Surface Lock cannot reuse the optional color-fill skip. Its failed readback
+   must restore dirty state and release this call's CS acquisition before returning
+   SurfaceLost. Private cleanup is entered by a redirected RETURN at bodySP. */
+#define DEPTH_SITES 2
+#define DEPTH_STRIDE 128
+static const struct {
+    DWORD site, procedure, tail, frame, context_arg, flags_arg, mask, dirty;
+    BYTE output;
+} g_depth_sites[DEPTH_SITES] = {
+    {0x2b736,0x2ae30,0x2bfd2,0x22c,0x240,0x24c,0xa0,0x898,0x4c},
+    {0x36d3f,0x36510,0x375e7,0x230,0x244,0x250,0xa4,0x88c,0x54}
+};
+static HMODULE g_depth_module;
+static BYTE *g_depth_code;
+
+static BOOL install_ddraw_depth_readback_fix(HMODULE module)
+{
+    static const BYTE prefix[] = {
+        0x8d,0x4c,0x24,0x4c,0x51,0x56,0x8b,0x10,0x50,
+        0xff,0x92,0x98,0,0,0,0x8b,0x44,0x24,0x4c,0x50,0x8b,0x10,0xff,0x52,0x08
+    };
+    static const BYTE tails[DEPTH_SITES][50] = {
+        {0x8b,0x84,0x24,0xa0,0,0,0,0x8b,0x94,0x24,0x4c,0x02,0,0,0x5f,0x3b,0xc6,
+         0x89,0x9d,0x8c,0x08,0,0,0x89,0x95,0x90,0x08,0,0,0x5e,0x5d,0x5b,0x75,0x05,
+         0xe8,0x66,0x50,0xfd,0xff,0x33,0xc0,0x81,0xc4,0x2c,0x02,0,0,0xc2,0x14,0},
+        {0x8b,0x84,0x24,0xa4,0,0,0,0x8b,0x8c,0x24,0x50,0x02,0,0,0x89,0x9d,0x80,
+         0x08,0,0,0x5f,0x3b,0xc6,0x89,0x8d,0x84,0x08,0,0,0x5e,0x5d,0x5b,0x75,0x05,
+         0xe8,0x51,0x9a,0xfc,0xff,0x33,0xc0,0x81,0xc4,0x30,0x02,0,0,0xc2,0x14,0}
+    };
+    static const BYTE thunk[] = {
+        0x8b,0x44,0x24,0x0c,0xc7,0,0,0,0,0,
+        0xff,0x74,0x24,0x0c,0xff,0x74,0x24,0x0c,0xff,0x74,0x24,0x0c,
+        0xff,0x92,0x98,0,0,0,0x85,0xc0,0x78,0x09,
+        0x8b,0x4c,0x24,0x0c,0x83,0x39,0,0x75,0x07,
+        0x81,0x04,0x24,0,0,0,0,0xc2,0x0c,0
+    };
+    static const BYTE cleanup[] = {
+        0x8b,0x84,0x24,0,0,0,0,         /* mov eax,[esp+context_arg] */
+        0xc7,0x80,0,0,0,0,1,0,0,0,     /* restore [context+dirty]=1 */
+        0x83,0xbc,0x24,0,0,0,0,0,       /* cmp [esp+cached skip-CS-mask],0 */
+        0x75,0x05,0xe8,0,0,0,0,         /* nonzero skips LeaveCriticalSection */
+        0x5f,0x5e,0x5d,0x5b,           /* restore original nonvolatile registers */
+        0xb8,0xc2,0x01,0x76,0x88,       /* DDERR_SURFACELOST, after the Leave call */
+        0x81,0xc4,0,0,0,0,0xc2,0x14,0 /* discard original frame; ret 20 */
+    };
+    BYTE *base=(BYTE *)module,*code;
+    IMAGE_NT_HEADERS *nt;
+    DWORD protections[DEPTH_SITES],old_code,ignored;
+    SIZE_T k,i;
+    BOOL installed=TRUE;
+    if(!module || ((IMAGE_DOS_HEADER *)base)->e_magic!=IMAGE_DOS_SIGNATURE) return FALSE;
+    nt=(IMAGE_NT_HEADERS *)(base+((IMAGE_DOS_HEADER *)base)->e_lfanew);
+    if(nt->Signature!=IMAGE_NT_SIGNATURE || nt->FileHeader.Machine!=IMAGE_FILE_MACHINE_I386 ||
+       nt->FileHeader.TimeDateStamp!=0x61dd5c00 ||
+       nt->OptionalHeader.Magic!=IMAGE_NT_OPTIONAL_HDR32_MAGIC ||
+       nt->OptionalHeader.SizeOfImage!=0x561000) return FALSE;
+    if(module==g_depth_module && g_depth_code) {
+        for(k=0;k<DEPTH_SITES;k++) {
+            BYTE *site=base+g_depth_sites[k].site;
+            installed=installed && site[0]==0xe8 && site[5]==0x90 &&
+                (BYTE *)((DWORD)(ULONG_PTR)(site+5)+*(DWORD *)(site+1))==g_depth_code+k*DEPTH_STRIDE;
+        }
+        if(installed) return TRUE;
+    }
+    for(k=0;k<DEPTH_SITES;k++) {
+        BYTE *p=base+g_depth_sites[k].procedure,*cache=p+0x2a;
+        if(p[0]!=0x81 || p[1]!=0xec || *(DWORD *)(p+2)!=g_depth_sites[k].frame ||
+           p[6]!=0x66 || p[7]!=0xa1 || *(DWORD *)(p+8)!=(DWORD)(ULONG_PTR)(base+0x176734) ||
+           !same(p+12,"\x53\x55\x56\x57",4) ||
+           !same(cache,"\x8b\x84\x24",3) || *(DWORD *)(cache+3)!=g_depth_sites[k].flags_arg ||
+           !same(cache+7,"\x25\x00\x00\x00\x10\x89\x84\x24",8) ||
+           *(DWORD *)(cache+15)!=g_depth_sites[k].mask ||
+           !same(base+g_depth_sites[k].tail,(const char *)tails[k],sizeof(tails[k]))) return FALSE;
+        for(i=0;i<sizeof(prefix);i++) {
+            BYTE expected=(i==3 || i==18) ? g_depth_sites[k].output : prefix[i];
+            if(base[g_depth_sites[k].site-9+i]!=expected) return FALSE;
+        }
+    }
+    /* Check the exact Leave helper and its CS argument, including ASLR. */
+    if(base[0x41b60]!=0x68 || *(DWORD *)(base+0x41b61)!=(DWORD)(ULONG_PTR)(base+0x176da0) ||
+       !same(base+0x41b65,"\xff\x15",2) ||
+       *(DWORD *)(base+0x41b67)!=(DWORD)(ULONG_PTR)(base+0x54e780) || base[0x41b6b]!=0xc3) return FALSE;
+    code=(BYTE *)VirtualAlloc(NULL,DEPTH_SITES*DEPTH_STRIDE,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE);
+    if(!code) return FALSE;
+    for(k=0;k<DEPTH_SITES;k++) {
+        BYTE *t=code+k*DEPTH_STRIDE,*end=t+64;
+        for(i=0;i<sizeof(thunk);i++) t[i]=thunk[i];
+        for(i=0;i<sizeof(cleanup);i++) end[i]=cleanup[i];
+        *(DWORD *)(t+44)=(DWORD)(ULONG_PTR)end-(DWORD)(ULONG_PTR)(base+g_depth_sites[k].site+5);
+        *(DWORD *)(end+3)=g_depth_sites[k].context_arg;
+        *(DWORD *)(end+9)=g_depth_sites[k].dirty;
+        *(DWORD *)(end+20)=g_depth_sites[k].mask;
+        *(DWORD *)(end+28)=(DWORD)(ULONG_PTR)(base+0x41b60)-(DWORD)(ULONG_PTR)(end+32);
+        *(DWORD *)(end+43)=g_depth_sites[k].frame;
+    }
+    if(!VirtualProtect(code,DEPTH_SITES*DEPTH_STRIDE,PAGE_EXECUTE_READ,&old_code)) {
+        VirtualFree(code,0,MEM_RELEASE);return FALSE;
+    }
+    FlushInstructionCache(GetCurrentProcess(),code,DEPTH_SITES*DEPTH_STRIDE);
+    /* Acquire both write permissions before changing either call-site. */
+    for(k=0;k<DEPTH_SITES;k++) {
+        if(!VirtualProtect(base+g_depth_sites[k].site,6,PAGE_EXECUTE_READWRITE,&protections[k])) {
+            while(k) {--k;VirtualProtect(base+g_depth_sites[k].site,6,protections[k],&ignored);}
+            VirtualFree(code,0,MEM_RELEASE);return FALSE;
+        }
+    }
+    for(k=0;k<DEPTH_SITES;k++) {
+        BYTE *site=base+g_depth_sites[k].site;
+        site[0]=0xe8;
+        *(DWORD *)(site+1)=(DWORD)(ULONG_PTR)(code+k*DEPTH_STRIDE)-(DWORD)(ULONG_PTR)(site+5);
+        site[5]=0x90;
+        VirtualProtect(site,6,protections[k],&ignored);
+        FlushInstructionCache(GetCurrentProcess(),site,6);
+    }
+    g_depth_module=module;g_depth_code=code;
+    return TRUE;
+}
+
 /* Once ddraw.dll is loaded: replace its mouse imports (it calls them for itself and from
    its hooks of the game's imports). */
 static void guard_ddraw_mouse(void)
@@ -629,12 +748,14 @@ static void guard_ddraw_mouse(void)
         return;
     g_ddraw_mouse_done = TRUE;
     install_ddraw_render_target_fix(dd);
+    install_ddraw_depth_readback_fix(dd);
     patch_import(dd, "USER32.dll", "SetCursorPos", (void *)local_SetCursorPos);
     patch_import(dd, "USER32.dll", "ClipCursor", (void *)local_ClipCursor);
     patch_import(dd, "USER32.dll", "SetForegroundWindow", (void *)local_SetForegroundWindow);
     patch_import(dd, "USER32.dll", "SetFocus", (void *)local_SetFocus);
 #ifdef ARMADA_TESTHOOKS
     stay_in_background(dd);
+    install_test_d3d_trace(dd);
 #endif
 }
 
@@ -897,6 +1018,94 @@ static HRESULT WINAPI test_DirectSoundCreate(const GUID *guid, void **sound, voi
     HRESULT hr = mute_test_audio();
     if (FAILED(hr)) return hr;  /* do not start audible test streams */
     return g_DirectSoundCreate(guid, sound, outer);
+}
+
+/* Opt-in startup diagnosis: retain CreateDevice's original HRESULT. */
+typedef HRESULT (WINAPI *test_createdevice_fn)(void *, UINT, DWORD, HWND, DWORD, DWORD *, void **);
+static void *g_test_d3d_resume[4];
+
+static HRESULT WINAPI test_trace_createdevice(void *object, UINT adapter, DWORD type,
+    HWND focus, DWORD flags, DWORD *parameters, void **output)
+{
+    DWORD owner = 0, thread = GetWindowThreadProcessId(focus, &owner);
+    RECT rect = {0};
+    HRESULT hr;
+    test_createdevice_fn original = (test_createdevice_fn)(*(void ***)object)[16];
+    GetClientRect(focus, &rect);
+    hr = original(object, adapter, type, focus, flags, parameters, output);
+    log_line("D3D_INIT_TRACE CreateDevice hr=%08lx adapter=%u type=%lu flags=%08lx hwnd=%08lx owner=%lu window_thread=%lu caller_thread=%lu client=%ld,%ld windowed=%lu output=%08lx",
+        hr, adapter, type, flags, (DWORD)focus, owner, thread, GetCurrentThreadId(),
+        rect.right, rect.bottom, parameters ? parameters[8] : 0,
+        output ? (DWORD)*output : 0);
+    return hr;
+}
+
+static __declspec(naked) void test_trace_create0(void)
+{
+    __asm { push esi }
+    __asm { push ebx }
+    __asm { push eax }
+    __asm { call test_trace_createdevice }
+    __asm { jmp dword ptr [g_test_d3d_resume] }
+}
+static __declspec(naked) void test_trace_create1(void)
+{
+    __asm { push esi }
+    __asm { push ebx }
+    __asm { push eax }
+    __asm { call test_trace_createdevice }
+    __asm { jmp dword ptr [g_test_d3d_resume + 4] }
+}
+static __declspec(naked) void test_trace_create2(void)
+{
+    __asm { push esi }
+    __asm { push ebx }
+    __asm { push eax }
+    __asm { call test_trace_createdevice }
+    __asm { jmp dword ptr [g_test_d3d_resume + 8] }
+}
+static __declspec(naked) void test_trace_create3(void)
+{
+    __asm { push esi }
+    __asm { push ebx }
+    __asm { push eax }
+    __asm { call test_trace_createdevice }
+    __asm { jmp dword ptr [g_test_d3d_resume + 12] }
+}
+
+static void install_test_d3d_trace(HMODULE wrapper)
+{
+    /* Leave every CMP intact: earlier branches enter the final CMP directly. */
+    static const DWORD offsets[4] = {0x1e87e, 0x1e8e5, 0x1e948, 0x1e9b2};
+    static const BYTE expected[4][6] = {
+        {0x56,0x53,0x50,0xff,0x52,0x40},
+        {0x56,0x53,0x50,0xff,0x51,0x40},
+        {0x56,0x53,0x50,0xff,0x51,0x40},
+        {0x56,0x53,0x50,0xff,0x51,0x40}};
+    void *relays[4] = {(void *)test_trace_create0,(void *)test_trace_create1,(void *)test_trace_create2,(void *)test_trace_create3};
+    BYTE *base = (BYTE *)wrapper;
+    IMAGE_NT_HEADERS *headers;
+    unsigned i, j;
+    DWORD previous, ignored;
+    if (env_uint("ARMADA_TEST_D3D_INIT_TRACE") != 1) return;
+    headers = (IMAGE_NT_HEADERS *)(base+((IMAGE_DOS_HEADER *)base)->e_lfanew);
+    if (headers->FileHeader.Machine != IMAGE_FILE_MACHINE_I386 ||
+        headers->FileHeader.TimeDateStamp != 0x61dd5c00 ||
+        headers->OptionalHeader.SizeOfImage != 0x561000) return;
+    for (i=0; i<4; i++)
+        for (j=0; j<6; j++)
+            if (base[offsets[i]+j] != expected[i][j]) return;
+    for (i=0; i<4; i++) {
+        unsigned size = 6;
+        BYTE *site = base+offsets[i];
+        if (!VirtualProtect(site,size,PAGE_EXECUTE_READWRITE,&previous)) return;
+        g_test_d3d_resume[i] = site+size;
+        site[0]=0xe9;
+        *(int *)(site+1) = (int)((BYTE *)relays[i]-(site+5));
+        for (j=5;j<size;j++) ((volatile BYTE *)site)[j]=0x90;
+        VirtualProtect(site,size,previous,&ignored);
+        FlushInstructionCache(GetCurrentProcess(),site,size);
+    }
 }
 
 /* Native -window calls RestoreDisplayMode, which destroys GOG's D3D9 facade.
@@ -1467,4 +1676,4 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
 }
 
 /* Marker export so the installer can recognise this proxy. */
-__declspec(dllexport) const char ArmadaCursorFix[] = "ArmadaCursorFix 1.3.0 (cursor, ddraw mapping and graphics Mutex isolation, light lifetime, window close, mouse and focus guards, lost-device render target guard)";
+__declspec(dllexport) const char ArmadaCursorFix[] = "ArmadaCursorFix 1.3.1 (cursor, ddraw mapping and graphics Mutex isolation, light lifetime, window close, mouse and focus guards, lost-device color-fill and depth-readback guards)";
