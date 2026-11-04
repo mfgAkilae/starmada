@@ -19,11 +19,11 @@ Internet-Recherche vom 2026-11-04 für **Armada 1, Stock/GOG, Standard Tech**, R
 
 ## Federation: A und B
 
-**Plan:** Mining + Shipyard → erste Defiants → Research Facility und Special → Akiras; danach bei laufender Economy Advanced Yard, Sovereigns und ausgewählter Nebula-Support. A führt zunächst mobile Defiants mit Mines, B Akiras mit Pulsar. Nicht beide Slots bei reinem Defiant-Queue-Refill belassen.
+**Plan:** Mining + Shipyard → erste Defiants → Research Facility und Special → Akiras; danach bei laufender Economy Advanced Yard und Sovereigns. Für Nebula-Support zusätzlich **Science Station und die benötigten Research-Pods** einplanen; Advanced Yard allein produziert nur das Ship. A führt zunächst mobile Defiants mit Mines, B Akiras mit Pulsar. Nicht beide Slots bei reinem Defiant-Queue-Refill belassen. [Offizieller Federation-Eintrag](https://gaming.trekcore.com/armada/ships-federation.html).
 
-**Combat:** Eine kleine Front-Group aktiv führen und Focus Fire auf einen sichtbaren Gegner setzen. Beschädigte Ships rechtzeitig zum Yard schicken und nach Repair zurückholen. Steamrunners nur mit Eskorte und Sichtunterstützung nutzen; der offizielle QA-Tipp ist ein separat gesteuerter Scout mit Guard auf die Artillery. Nebula später separat gruppieren, damit Support-Specials zugänglich bleiben. Standard Sovereigns nicht mit Campaign-Enterprise-Werten kalkulieren.
+**Combat:** Eine kleine Front-Group aktiv führen und Focus Fire auf einen sichtbaren Gegner setzen. Beschädigte Ships rechtzeitig zum Yard schicken und nach Repair zurückholen. Steamrunners mit Abstand, Combat-Escort und Sichtunterstützung nutzen; der offizielle QA-Tipp ist ein separat gesteuerter Scout mit Guard auf die Artillery. Scout-Guard ersetzt keine Combat-Escort. Artillery gegen nahe Gegner kann die eigene Fleet treffen. Nebula später separat gruppieren, damit erforschte Support-Specials zugänglich bleiben. Standard Sovereigns nicht mit Campaign-Enterprise-Werten kalkulieren. [Offizielle QA-Tipps](https://gaming.trekcore.com/armada/strategy.html).
 
-**Special-Ziel:** A erforscht Antimatter Mines, platziert sie auf einem tatsächlich genutzten Approach und beobachtet Mine/Energy. B setzt Chain Reaction Pulsar gegen eine geeignete Enemy-Group ein. Corbomite-aktive Sovereigns sind ein Grund, reflektierbare Specials zurückzuhalten.
+**Special-Ziel:** A erforscht Antimatter Mines, platziert sie auf einem tatsächlich genutzten Approach und beobachtet Mine/Energy. B setzt Chain Reaction Pulsar gegen eine sichtbare, **nicht cloaked** Enemy-Group ein; die archivierten 1.2-Notes schließen cloaked Targets aus. Corbomite-aktive Sovereigns sind ein Grund, reflektierbare Specials zurückzuhalten. [1.2-Patch-Notes](https://gaming.trekcore.com/armada/faq.html).
 
 ## Klingon: C und D
 
@@ -39,13 +39,13 @@ Internet-Recherche vom 2026-11-04 für **Armada 1, Stock/GOG, Standard Tech**, R
 
 **Combat:** Talon sammelt Information, Attack-Group greift ein bekanntes Ziel an und zieht sich geordnet zurück. Raptors separat mit Schutz und Sicht führen. Warbirds gegen ein sichtbares Ziel zusammenführen; Shield Inversion gezielt einsetzen. Ein Shrike mit erforschtem Spy ist später eine Option für Intelligence. Keine Crew-intensiven Boarding-Versuche ohne konkreten Vorteil.
 
-**Special-Ziel:** Sofort normaler Cloak/Decloak mit State-/Energy-Proof; später Shield Inversion mit vorher angeschlagenen eigenen Shields und sichtbarer Target-/Shield-Änderung. Cloak nimmt Shields herunter; vor dem offenen Fight decloaken und nicht im feindlichen Fire als universellen Escape behandeln.
+**Special-Ziel:** Sofort normaler Cloak/Decloak mit State-/Energy-Proof; später Shield Inversion mit vorher angeschlagenen eigenen Shields und sichtbarer Target-/Shield-Änderung. Angeschlagene eigene Shields sind ein sinnvoller Nutzungs-/Proof-Fall, kein belegtes Cast-Prerequisite. Cloak nimmt Shields herunter; vor dem offenen Fight decloaken und nicht im feindlichen Fire als universellen Escape behandeln. Laut Firsthand-Guide regenerieren Shields/Energy während Cloak nicht: einen sicheren Decloak-/Repair-Point einplanen. [Firsthand Guide, §065](https://gamefaqs.gamespot.com/pc/250551-star-trek-armada/faqs/27107).
 
 ## Borg: F
 
 **Plan:** Mining + Assembly Matrix → Interceptors und Detector für aktive Exploration → Modification Center + Transwarp → Spheres und Regeneration; Advanced Matrix/Cubes erst mit passender Economy. Bei Crew-Bottleneck einen weiteren Nexus priorisieren, statt noch mehr Yards ohne Crew zu bauen.
 
-**Combat:** Interceptors sind mobile Raid-/Recovery-Units, keine Cube-Ersatz-Tanks. Transwarp zu einem aufgeklärten, gültigen Point taktisch einsetzen. Spheres für den Frontkampf nutzen; Regeneration am beschädigten Ship aktivieren und Recovery beobachten. Cubes später mit Crew-Reserve führen; Assimilation kostet auch eigene Crew. Nach einem Capture Officers und Crew erneut prüfen.
+**Combat:** Interceptors sind mobile Raid-/Recovery-Units, keine Cube-Ersatz-Tanks. Transwarp braucht einen gültigen Point mit **aktueller eigener/allied Line of Sight**, nicht nur früher erkundeten Fog. Spheres für den Frontkampf nutzen; Regeneration am beschädigten Ship aktivieren und Recovery beobachten. Cubes später mit Crew-Reserve führen; Assimilation kostet auch eigene Crew. Nach einem Capture Officers und Crew erneut prüfen. [Manual, PDF Pages 22–23](../work/gog_repaired/Manual.pdf).
 
 **Special-Ziel:** Ein tatsächlicher Transwarp mit neuer Position und Energy-Abzug, dann beobachtete Regeneration. Holding Beam erst mit Research, geeignetem Target und ausreichender Crew einsetzen.
 
