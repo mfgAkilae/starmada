@@ -51,11 +51,14 @@ def snapshot(run, tag):
         rect = wt.RECT()
         if not probe.user32.GetClientRect(hwnd, ctypes.byref(rect)):
             raise RuntimeError('game client rectangle unavailable')
+        owner = wt.DWORD()
+        probe.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
         return dict(code=read(SITE, 12), d3d=integer(wrapper + 0x460724),
                     windowed=integer(wrapper + 0x468478), frames=integer(0x6d6830),
                     mode=integer(engine + 0x124), fullscreen=read(device + 0x40, 1)[0],
                     view=tuple(round(v) for v in struct.unpack('<ff', read(device + 0xcc, 8))),
-                    client=(rect.right - rect.left, rect.bottom - rect.top))
+                    client=(rect.right - rect.left, rect.bottom - rect.top),
+                    pid=pid, window_pid=owner.value)
     finally:
         kernel.CloseHandle(handle)
 
@@ -72,6 +75,7 @@ class WindowRenderer(unittest.TestCase):
         self.assertNotEqual(STATE['d3d'], 0, 'render loop runs without a GOG D3D9 device')
         self.assertEqual(STATE['windowed'], 1)
         self.assertEqual(STATE['fullscreen'], 0)
+        self.assertEqual(STATE['window_pid'], STATE['pid'], 'render engine window belongs to another client')
         self.assertEqual(STATE['view'], STATE['client'], 'black margins: canvas and game view differ')
 
     def replay(self, status, destination):
@@ -116,7 +120,7 @@ class WindowRenderer(unittest.TestCase):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('run')
-    parser.add_argument('tag', choices=('A', 'B'))
+    parser.add_argument('tag', choices=tuple('ABCDEFGH'))
     parser.add_argument('--live-only', action='store_true')
     args = parser.parse_args()
     STATE = snapshot(args.run, args.tag)

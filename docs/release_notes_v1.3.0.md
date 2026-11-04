@@ -33,8 +33,10 @@ release does not claim that every multiplayer failure has been eliminated.
   recovers original GOG bytes.
 - Existing sync instruction replays, lost-target crash replays, comparator and
   production mouse/focus guard checks pass.
-- The ongoing UI-controlled multiplayer validation and its measured duration,
-  load requirements and limits are recorded in
+- The required six-player UI validation includes real mining/economy, fleet
+  movement/combat and Special Abilities; it remains pending. The earlier
+  two-controlled-player/six-native-AI run is a limited historical result. Methods,
+  measured duration, load requirements and limits are recorded in
   [the Late-Game report](https://github.com/mfgAkilae/starmada/blob/v1.3.0/docs/late_game_validation_2026-11-04.md).
 
 ### Compatibility and limits
@@ -50,6 +52,7 @@ in a long match. Mods that replace the renderer, reopen its Mutexes through
 additional Handles, or rely on cross-process graphics Locks need separate
 testing. Separate-PC and mixed-CPU multiplayer remain unverified.
 
-Four simultaneous GOG clients still produced display-initialization failures
-during testing. The test launcher now refuses to start another match while an
-Armada Process is present. Two clients are the validated test setup.
+Earlier multi-instance attempts encountered device-creation failures whose cause
+is unresolved; they do not establish a two-client limit. The later six-client
+initialization passed 18 render checks, including per-Process Window ownership.
+The full six-player gameplay and sustained Late-Game load acceptance remain open.

@@ -1,49 +1,6 @@
 {
   "checkpoint": {
-    "latest": {
-      "active_battle_clusters": 5,
-      "active_firing_ships": 14,
-      "combat_ships": 190,
-      "damaged_combat_ships": 45,
-      "simulation_seconds": 2588.093,
-      "step": 172000,
-      "teams": {
-        "1": {
-          "combat_ships": 12,
-          "objects": 48
-        },
-        "2": {
-          "combat_ships": 16,
-          "objects": 54
-        },
-        "3": {
-          "combat_ships": 19,
-          "objects": 53
-        },
-        "4": {
-          "combat_ships": 13,
-          "objects": 44
-        },
-        "5": {
-          "combat_ships": 55,
-          "objects": 68
-        },
-        "6": {
-          "combat_ships": 17,
-          "objects": 47
-        },
-        "7": {
-          "combat_ships": 38,
-          "objects": 44
-        },
-        "8": {
-          "combat_ships": 20,
-          "objects": 52
-        }
-      },
-      "tick": 172002,
-      "weapon_instances": 904
-    },
+    "error": null,
     "metrics": {
       "conditions": {
         "duration": false,
@@ -61,18 +18,45 @@
       },
       "first_simulation_seconds": 17.792,
       "gaps_over_maximum": 0,
-      "last_simulation_seconds": 2588.093,
-      "last_step": 172000,
-      "longest_fleet_seconds": 0,
-      "observed_seconds": 2570.301,
-      "pairs": 172,
-      "parallel_combat_seconds": 0,
+      "last_simulation_seconds": 4279.031,
+      "last_step": 280000,
+      "longest_fleet_seconds": 60.0,
+      "observed_seconds": 4261.239,
+      "pairs": 280,
+      "parallel_combat_seconds": 15.0,
       "passed": false,
       "peak_battle_clusters": 7,
-      "peak_combat_ships": 196
+      "peak_combat_ships": 206
     },
-    "state": "observing",
-    "wall_time": "2026-11-04T15:17:38.324449+00:00"
+    "state": "incomplete",
+    "wall_time": "2026-11-04T15:46:18.877201+00:00"
+  },
+  "final_metrics": {
+    "conditions": {
+      "duration": false,
+      "parallel_combat": false,
+      "sustained_fleet": false
+    },
+    "criteria": {
+      "late_start_seconds": 3600,
+      "max_gap_seconds": 60,
+      "min_battle_clusters": 3,
+      "min_combat_ships": 200,
+      "min_fleet_seconds": 600,
+      "min_parallel_seconds": 300,
+      "min_simulation_seconds": 5400
+    },
+    "first_simulation_seconds": 17.792,
+    "gaps_over_maximum": 0,
+    "last_simulation_seconds": 4279.031,
+    "last_step": 280000,
+    "longest_fleet_seconds": 60.0,
+    "observed_seconds": 4261.239,
+    "pairs": 280,
+    "parallel_combat_seconds": 15.0,
+    "passed": false,
+    "peak_battle_clusters": 7,
+    "peak_combat_ships": 206
   },
   "firewall": {
     "changed": false,
@@ -95,11 +79,12 @@
     ]
   },
   "limits": [
-    "UI validation still running; not a passing Late-Game gate",
-    "One PC and CPU; no fan-project validation"
+    "Late-Game acceptance failed",
+    "Method did not satisfy the replacement six-player task",
+    "One PC/CPU; no fan-project validation"
   ],
   "production_dll_sha256": "dc05f3090816ce804d5eb95b6fd9bffd813c0408f4b16f039713efdff7a92163",
-  "recorded_utc": "2026-11-04T15:17:42.706026+00:00",
+  "recorded_utc": "2026-11-04T17:14:06.847223+00:00",
   "run": "ui_stress2",
   "runtime_imports_and_mutexes": [
     {
@@ -201,6 +186,7 @@
     "stock_units": true
   },
   "schema": 1,
+  "stop_reason": "User required six fully UI-controlled players, real economy and Special Abilities; the two-controlled-player/six-native-AI method was rejected.",
   "stress_fixture": {
     "clients": {
       "A": {
@@ -228,5 +214,10 @@
       "key": "sd_value_5",
       "stock_value": 10000
     }
-  }
+  },
+  "unvalidated_gameplay": [
+    "mining/deposit/income",
+    "Research",
+    "Special Abilities"
+  ]
 }

@@ -12,11 +12,13 @@ from late_game_player import BASE, Memory
 from setup_late_game_lobby import Lobby
 
 
-def select(run, name, fixture):
+def select(run, name, fixture, tag='B'):
     if not all(re.fullmatch(r'[A-Za-z0-9_-]+', value) for value in (run, fixture)):
         raise ValueError('invalid run or fixture')
-    lobby = Lobby(run, 'B', fixture)
-    memory = Memory(lobby.pid, BASE / 'work' / 'play_clients' / fixture / 'B' / 'Armada.exe')
+    if tag not in 'ABCDEFGH' or len(tag) != 1:
+        raise ValueError('peer tag must be A..H')
+    lobby = Lobby(run, tag, fixture)
+    memory = Memory(lobby.pid, BASE / 'work' / 'play_clients' / fixture / tag / 'Armada.exe')
     try:
         deadline = time.monotonic() + 15
         while True:
@@ -50,9 +52,10 @@ def select(run, name, fixture):
         lobby.click(97, 76)
         if memory.u(0x61e5ec) != 0:
             raise RuntimeError('native GUI did not select the verified first row')
-        result = dict(expected_host=name, selected_row=0, guid=entry['guid'],
+        result = dict(tag=tag, expected_host=name, selected_row=0, guid=entry['guid'],
                       started=False, discovered=entries)
-        (lobby.root / 'session_selection.json').write_text(json.dumps(result, indent=2) + '\n')
+        output = 'session_selection.json' if tag == 'B' else f'session_selection_{tag}.json'
+        (lobby.root / output).write_text(json.dumps(result, indent=2) + '\n')
         print(json.dumps(result))
     finally:
         memory.close()
@@ -63,5 +66,6 @@ if __name__ == '__main__':
     parser.add_argument('run')
     parser.add_argument('name')
     parser.add_argument('--fixture', default='live')
+    parser.add_argument('--tag', choices=list('ABCDEFGH'), default='B')
     args = parser.parse_args()
-    select(args.run, args.name, args.fixture)
+    select(args.run, args.name, args.fixture, args.tag)

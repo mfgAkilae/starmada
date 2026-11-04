@@ -153,6 +153,8 @@ without changing Window size, Z-Order or desktop Focus. The profile is local and
   - `pe.py`, `xref.py`, `ctxdis.py`, `audit_callers.py`, `vcall.py`, `reach.py`, `rng_ancestors.py`, `hier.py` – disassembly, RTTI vtable map, call sites, reachability
   - `probe.py`, `launch.ps1`, `trycfg.ps1`, `clickseq.py`, `cursorhash.py`, `fake_dxfilemap.py` – runtime checks (windows, screenshots, FPU control word, cursor, wrapper mapping)
   - `mp_match.ps1`, `mp_inst.ps1`, `start_bg.py`, `clk.py`, `drag.py`, `shot.py`, `cmpdumps.py`, `watch_mp.sh`, `mouse_watchdog.py` – two-instance multiplayer test bed (needs the test build of the proxy, `src\strlkup_proxy\build.cmd test`)
+  - `prepare_play_test.py`, `start_six_player_test.ps1`, `setup_six_player_lobby.py`, `ui_player.py` – verified GOG fixtures and six real UI-controlled Human clients; controllers must actively play
+  - `bind_match_identity.py`, `late_game_metrics.py`, `watch_late_game.py` – complete peer-state comparison and measured Late-Game load; runtime Owner/Alliance binding excludes NPCs and allied fire from Player combat qualification
   - `make_release.py` – builds the proxy, embeds it into the patcher, packs `Armada_MP_fix.exe`
     (`python -m PyInstaller --onefile --console --name Armada_MP_fix release/armada_fix.py`) and writes `SHA256SUMS.txt`
   - `test_sync_instructions.py` – isolated instruction replays (requires `pefile`, `unicorn`)

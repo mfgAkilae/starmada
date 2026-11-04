@@ -1,0 +1,259 @@
+{
+  "schema": 1,
+  "run": "agents6_2",
+  "snapshot_utc": "2026-11-04T18:35:31.927926+00:00",
+  "status": "in_progress_not_accepted",
+  "source": "same six Human processes, stock finite-resource GOG match",
+  "observer": {
+    "latest": {
+      "active_battle_clusters": 0,
+      "active_firing_ships": 0,
+      "combat_scope": "hostile_declared_alliances",
+      "combat_ships": 66,
+      "damaged_combat_ships": 4,
+      "fleet_scope": "declared_players",
+      "peer_count": 6,
+      "peers": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "player_alliances": {
+        "1": 1,
+        "2": 1,
+        "3": 0,
+        "4": 1,
+        "5": 0,
+        "6": 0
+      },
+      "player_teams": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "simulation_seconds": 4686.975,
+      "step": 311000,
+      "teams": {
+        "1": {
+          "combat_ships": 8,
+          "objects": 22
+        },
+        "2": {
+          "combat_ships": 16,
+          "objects": 29
+        },
+        "3": {
+          "combat_ships": 17,
+          "objects": 36
+        },
+        "4": {
+          "combat_ships": 5,
+          "objects": 16
+        },
+        "5": {
+          "combat_ships": 6,
+          "objects": 20
+        },
+        "6": {
+          "combat_ships": 14,
+          "objects": 27
+        }
+      },
+      "tick": 311002,
+      "weapon_instances": 301
+    },
+    "metrics": {
+      "combat_scope": "hostile_declared_alliances",
+      "conditions": {
+        "duration": false,
+        "parallel_combat": false,
+        "sustained_fleet": false
+      },
+      "criteria": {
+        "late_start_seconds": 3600,
+        "max_gap_seconds": 60,
+        "min_battle_clusters": 3,
+        "min_combat_ships": 200,
+        "min_fleet_seconds": 600,
+        "min_parallel_seconds": 300,
+        "min_simulation_seconds": 5400
+      },
+      "first_simulation_seconds": 6.548,
+      "fleet_scope": "declared_players",
+      "gaps_over_maximum": 0,
+      "last_simulation_seconds": 4686.975,
+      "last_step": 311000,
+      "longest_fleet_seconds": 0,
+      "observed_seconds": 4680.427000000001,
+      "pairs": 1244,
+      "parallel_combat_seconds": 0,
+      "passed": false,
+      "peak_battle_clusters": 3,
+      "peak_combat_ships": 72,
+      "player_alliances": {
+        "1": 1,
+        "2": 1,
+        "3": 0,
+        "4": 1,
+        "5": 0,
+        "6": 0
+      },
+      "player_teams": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    "peer_count": 6,
+    "peers": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F"
+    ],
+    "state": "observing",
+    "wall_time": "2026-11-04T18:35:29.038663+00:00"
+  },
+  "runtime_identity": {
+    "utc": "2026-11-04T18:31:02.880318+00:00",
+    "peers": {
+      "A": {
+        "owner": 6,
+        "alliance": 0,
+        "local_slot": 0,
+        "engine_mode": 2,
+        "pid": 115364,
+        "executable": "E:\\dev\\starmada\\work\\play_clients\\agents6_stock1\\A\\Armada.exe"
+      },
+      "B": {
+        "owner": 1,
+        "alliance": 1,
+        "local_slot": 1,
+        "engine_mode": 2,
+        "pid": 6000,
+        "executable": "E:\\dev\\starmada\\work\\play_clients\\agents6_stock1\\B\\Armada.exe"
+      },
+      "C": {
+        "owner": 3,
+        "alliance": 0,
+        "local_slot": 2,
+        "engine_mode": 2,
+        "pid": 25352,
+        "executable": "E:\\dev\\starmada\\work\\play_clients\\agents6_stock1\\C\\Armada.exe"
+      },
+      "D": {
+        "owner": 4,
+        "alliance": 1,
+        "local_slot": 3,
+        "engine_mode": 2,
+        "pid": 96280,
+        "executable": "E:\\dev\\starmada\\work\\play_clients\\agents6_stock1\\D\\Armada.exe"
+      },
+      "E": {
+        "owner": 5,
+        "alliance": 0,
+        "local_slot": 4,
+        "engine_mode": 2,
+        "pid": 11656,
+        "executable": "E:\\dev\\starmada\\work\\play_clients\\agents6_stock1\\E\\Armada.exe"
+      },
+      "F": {
+        "owner": 2,
+        "alliance": 1,
+        "local_slot": 5,
+        "engine_mode": 2,
+        "pid": 10528,
+        "executable": "E:\\dev\\starmada\\work\\play_clients\\agents6_stock1\\F\\Armada.exe"
+      }
+    },
+    "native_players": [
+      {
+        "slot": 0,
+        "player_team": 6,
+        "alliance_index": 0,
+        "race_index": 0
+      },
+      {
+        "slot": 1,
+        "player_team": 1,
+        "alliance_index": 1,
+        "race_index": 0
+      },
+      {
+        "slot": 2,
+        "player_team": 3,
+        "alliance_index": 0,
+        "race_index": 3
+      },
+      {
+        "slot": 3,
+        "player_team": 4,
+        "alliance_index": 1,
+        "race_index": 3
+      },
+      {
+        "slot": 4,
+        "player_team": 5,
+        "alliance_index": 0,
+        "race_index": 2
+      },
+      {
+        "slot": 5,
+        "player_team": 2,
+        "alliance_index": 1,
+        "race_index": 1
+      },
+      {
+        "slot": 6,
+        "player_team": 0,
+        "alliance_index": 6,
+        "race_index": 4
+      },
+      {
+        "slot": 7,
+        "player_team": 0,
+        "alliance_index": 7,
+        "race_index": 4
+      }
+    ],
+    "scope": "fixed Alliance test, runtime Owner rows; no gameplay-state control",
+    "first_verified_step": "step_000250.txt"
+  },
+  "windows_audio_muted": {
+    "A": [
+      true
+    ],
+    "B": [
+      true
+    ],
+    "C": [
+      true
+    ],
+    "D": [
+      true
+    ],
+    "E": [
+      true
+    ],
+    "F": [
+      true
+    ]
+  },
+  "limitations": [
+    "Full individual UI gameplay/special proofs pending",
+    "Sustained late fleet/parallel battle gates not passed",
+    "Single-PC test; separate-PC and mixed-CPU multiplayer unverified"
+  ],
+  "metric_source_sha256": "c6824aae2edf5f477e81d8eeb7a37655d0b58bfdf4c8fe1639c07b736ebb5c5b"
+}

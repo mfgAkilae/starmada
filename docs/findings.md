@@ -449,9 +449,11 @@ A bounded audit of 27 shipped GOG EXE/DLL/DRV/OCX files found these literals onl
 in Armada's render-engine constructor, and no other shipped consumer opening
 them by name. Data-only mods keep their formats. Custom renderer modules and
 multiple engine/Handle aliases are outside that audit: the cleanup tracks the
-latest created Handle for each of the two names. Four concurrent test clients
-also encountered GOG display-initialization failures despite Mutex isolation;
-the launcher now permits only one test match at a time.
+latest created Handle for each of the two names. Earlier multi-instance attempts
+also encountered GOG device-creation failures. Their loaded WIP artifact hashes
+and raw CreateDevice results were not retained, so neither a client-count limit
+nor a cause related to Mutex isolation is established. Fresh six-client attempts
+record their artifacts before initialization and isolate one owned match.
 
 The Late-Game validation method and measured gameplay evidence are in
 [`late_game_validation_2026-11-04.md`](late_game_validation_2026-11-04.md).

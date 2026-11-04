@@ -1,8 +1,67 @@
 # Late-Game multiplayer validation
 
-The earlier active-player matches were short and contained small fleets. They do
-not establish that the reported Late-Game out-of-sync error is fixed. This work
-adds a measured load gate; a long idle match cannot pass it.
+The earlier matches were short or used incomplete player control. They do not
+establish that the reported Late-Game out-of-sync error is fixed. A long idle
+match cannot pass the measured load gate below.
+
+## Required replacement test
+
+The user rejected the two-controlled-player/six-native-AI method. The replacement
+requires **six independently controlled UI player slots, no native opponent AI**,
+normal finite resources, mining/deposit/income, economy and technology, explicit
+fleet movement/attack/retreat/repair, and actual researched Special Ability casts.
+The earlier high-resource run does not satisfy those conditions.
+
+The six-role training protocol is in
+[`agent_player_training.md`](agent_player_training.md). Source-backed mechanics
+remain distinct from completed in-game drills. Every player must show its own
+mining cycle and tactical orders; a queue receipt or Special-key acknowledgement
+alone is insufficient. Cast evidence includes Energy and the corresponding
+effect or target-state change.
+
+The six-client preparation uses the verified GOG files and stock `label.map`.
+The launcher records actual EXE/wrapper/proxy/configuration hashes and startup
+timestamps for each peer. Its lobby setup selects stock `6violins.bzn`, 5000
+Dilithium, 5000 Crew, 250 Officers, Standard Units/Tech and finite Moons. A/B are
+Federation, C/D Klingon, E Romulan and F Borg; A/C/E face B/D/F. These settings
+require native lobby readback before a completed scenario record is written.
+
+`launch.json` declares A..F. The observer and offline comparator require every
+declared peer; an F-only divergence or a missing F cannot pass as an A/B result.
+Run `agents6_2` has all six genuine Human clients in the same match. Each passed
+three live/replay render checks (18 total), including a D3D9 device, 640x480
+windowed canvas and a render Window owned by the corresponding Process. The
+full gameplay/economy/Special training and Late-Game acceptance remain incomplete.
+
+The runtime identity helper reads only each verified client's local Owner and
+fixed Alliance row after world initialization. All six copies agreed: A6, B1,
+C3, D4, E5, F2; A/C/E are Alliance0 and B/D/F Alliance1. This is recorded in
+`runtime_players.json`, with explicit `player_teams` and `player_alliances` in
+`launch.json`. It is not inferred from slot numbers or peer count and does not
+read unit positions or issue game input. Fixed Alliances must remain unchanged
+for this binding to be valid.
+
+The stock Map starts with ten `zentity*` NPCs on Owner8. The earlier unbound
+observer counted these as `wingman` fleet and could include NPC fights. Scoped
+metrics must count only declared Player-Owners and hostile Alliances; NPCs remain
+in the complete raw-state comparison so NPC-only divergence still fails. Legacy
+unbound reports describe all non-neutral fleet and cross-Owner firing, rather
+than proving Player-vs-Player combat. Do not apply a global Team8 exclusion:
+Team8 can be a legitimate Player in another match.
+
+For a fresh six-player run (test proxy Build required):
+
+```powershell
+.venv/Scripts/python.exe tools/prepare_play_test.py six_new --players 6
+powershell -NoProfile -File tools/start_six_player_test.ps1 -Run six_new -Fixture six_new
+.venv/Scripts/python.exe tools/watch_late_game.py six_new --minutes 240
+```
+
+The launcher verifies the lobby, render state and runtime Player binding. The
+six UI controllers must then actually play; launching Processes does not satisfy
+the gameplay requirement. Race plans and source limits are in the
+[Race Playbook](race_playbook_2026-11-04.md) and its
+[independent source audit](race_playbook_source_audit_2026-11-04.md).
 
 ## Acceptance criteria
 
@@ -27,14 +86,17 @@ at `0x67dcb8`; it is not inferred from wall time or Hook count. Original code
 `0x67dcb4`. The test-only Hook prints the integer accumulator without touching
 the x87 state.
 
-Stock combat ships are alive non-neutral objects of native kind `wingman`.
+Stock combat ships are alive objects of native kind `wingman`, restricted to
+explicit Player-Owners when a binding is present.
 Constructors, freighters, stations and scenery do not count toward the fleet
-threshold. A battle requires a shot within five simulation seconds at another
-live player's object. Shooter/target pairs and combatants within 1,000 units in
+threshold. A hostile battle requires a shot within five simulation seconds at
+another live Player's object in a different declared Alliance. Without an
+Alliance binding the metric identifies cross-Owner firing only. Shooter/target
+pairs and combatants within 1,000 units in
 X/Z form connected battle clusters. Installed weapons are counted separately
 from active firing.
 
-## Scenario and reproduction
+## Historical two-player scenarios and reproduction
 
 The trusted GOG 1.2 fixtures use the v1.2.0 simulation fixes and the v1.3.0 runtime
 candidate. Two independently controlled Federation players and six stock Hard
@@ -62,8 +124,10 @@ Use a new Run name. `-LateGame` defaults to one dump per 1,000 Hook steps, an
 has a separate wall timeout. Fixed process paths retain Windows audio-session
 mute and persistent Private/LocalSubnet firewall rules. Both live native-window
 render checks must pass. Input goes only to owned game windows/dialogs. The launcher
-refuses another running Armada match: four concurrent GOG clients encountered
-display-initialization failures even after the Mutex isolation fix.
+refuses another running Armada match to preserve the current test. Some earlier
+multi-instance attempts encountered display-initialization failures with an
+unresolved cause; they do not establish a two- or four-client limit. The later
+six-client initialization passed all 18 render checks described above.
 
 Host names are unique per Run. The join helper checks the exact waiting session
 name and native GUID before selecting its visible row, preventing a test client
@@ -105,7 +169,7 @@ A subsequently completed two Shipyards and queued Defiants; both players defende
 against native attacks. Local evidence lives in `work/det/ui_stress2`, including
 `A_ui_actions.jsonl`, `B_ui_actions.jsonl`, screenshots and peer dumps.
 
-## Calibration and pending result
+## Historical calibration results
 
 `late2`, the calibration run, captured 68 matching pairs through step 68,000:
 1,005 observed simulation seconds, peak 135 combat ships and six battle clusters.
@@ -118,7 +182,7 @@ players completed shipyards and ships; no game fix is inferred from bot mistakes
 | `late2` | Two scripted command controllers + six AIs | 1,005 s | 68 | 135 / 6 | Below Late-Game duration/load |
 | `late3` | Two scripted command controllers + six AIs | 2,343.753 s | 157 | 113 / 7 | Graphics stall; below gate |
 | `stress4` | Six AIs; UI exploration without a completed player build | 2,070.776 s | 139 | 105 / 6 | Calibration only; below gate |
-| `ui_stress2` | Two screenshot-guided UI agents + six AIs | In progress | In progress | In progress | Gate pending |
+| `ui_stress2` | Two screenshot-guided UI agents + six AIs | 4,261.239 s | 280 | 206 / 7 | Stopped for the replacement method; gate failed |
 
 `late3` exposed globally shared graphics Mutex names and rendering wait ownership
 defects, documented as finding 9. It did not produce a native OOS report. The
@@ -129,8 +193,13 @@ PID suffixes. Both clients pass all three live/shim renderer checks at 640x480.
 Their Windows audio sessions are muted. Firewall preflight reused verified
 Private/LocalSubnet rules (`changed: false`).
 
-Final measured duration/load and any divergence will be recorded after the UI
-Run. This report does not currently claim a passing Late-Game test.
+`ui_stress2` compared all 280 shared captures through step 280,000 without a
+dumped-state difference. Its 71.02 observed simulation minutes, 60 seconds of
+sustained late fleet load and 15 seconds of overlapping late combat did not meet
+the gate. Mining, resource income, Research and Special Abilities were not played
+in that run. It was stopped after the user required six fully played slots.
+Raw evidence remains under `work/det/ui_stress2`; this is a limited historical
+result, not acceptance of the user's requested test.
 
 ## Limits
 

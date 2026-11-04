@@ -70,6 +70,8 @@ class UIPlayer(Input):
         user.GetKeyboardLayout.restype = wt.HANDLE
         user.MapVirtualKeyExW.argtypes = [wt.UINT, wt.UINT, wt.HANDLE]
         user.MapVirtualKeyExW.restype = wt.UINT
+        user.GetWindowThreadProcessId.argtypes = [wt.HWND, ctypes.POINTER(wt.DWORD)]
+        user.GetWindowThreadProcessId.restype = wt.DWORD
         thread = user.GetWindowThreadProcessId(self.hwnd, None)
         if not thread:
             raise RuntimeError('Game Window Thread is unavailable')

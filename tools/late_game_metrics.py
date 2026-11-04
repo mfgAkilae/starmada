@@ -1,6 +1,8 @@
 """Compare complete peer dumps and require measured Late-Game load.
 
 python tools/late_game_metrics.py work/det/<run> --output summary.json --timeline samples.jsonl
+launch.json peers are binding; runs without a declaration default to A/B.
+--peers A B C D E F selects peers only without a manifest or when identical.
 Exit 1 means divergence; exit 2 means invalid or insufficient evidence.
 """
 import argparse
@@ -38,7 +40,33 @@ def _number(value):
     return result
 
 
-def sample(text):
+def _metric_scope(player_teams=None, player_alliances=None):
+    if player_teams is None:
+        if player_alliances is not None:
+            raise EvidenceError('player_alliances requires player_teams')
+        teams = None
+    else:
+        if (not isinstance(player_teams, (list, tuple)) or not player_teams or
+                any(type(team) is not int or not 1 <= team <= 8 for team in player_teams) or
+                len(set(player_teams)) != len(player_teams)):
+            raise EvidenceError('player_teams must contain unique integer Owner IDs from 1 through 8')
+        teams = sorted(player_teams)
+    alliances = None
+    if player_alliances is not None:
+        if (not isinstance(player_alliances, dict) or
+                set(player_alliances) != {str(team) for team in teams} or
+                any(type(value) is not int or not 0 <= value <= 7 for value in player_alliances.values())):
+            raise EvidenceError('player_alliances must map every declared string Owner ID to an integer Alliance ID 0..7')
+        alliances = {str(team): player_alliances[str(team)] for team in teams}
+    return dict(player_teams=teams, player_alliances=alliances,
+                fleet_scope='declared_players' if teams is not None else 'all_non_neutral',
+                combat_scope='hostile_declared_alliances' if alliances is not None else 'cross_owner')
+
+
+def sample(text, player_teams=None, player_alliances=None):
+    scope = _metric_scope(player_teams, player_alliances)
+    allowed = set(scope['player_teams']) if scope['player_teams'] is not None else None
+    alliances = scope['player_alliances']
     clock = re.search(r'^simulation_seconds (\S+) tick (\d+)$', text, re.M)
     header = re.match(r'step (\d+) synced_rng [0-9a-fA-F]+ table_index \d+\n', text)
     if not clock or not header:
@@ -70,7 +98,8 @@ def sample(text):
         if obj['id'] in objects:
             raise EvidenceError('duplicate game object ID')
         objects[obj['id']] = obj
-    alive = {key: obj for key, obj in objects.items() if obj['team'] and obj['health'] > 0}
+    alive = {key: obj for key, obj in objects.items() if obj['team'] and obj['health'] > 0 and
+             (allowed is None or obj['team'] in allowed)}
     teams = {}
     ships = []
     edges = []
@@ -82,6 +111,7 @@ def sample(text):
             ships.append(obj)
         target = alive.get(obj.get('target', 0))
         if (target and target['team'] != obj['team'] and
+                (alliances is None or alliances[str(target['team'])] != alliances[str(obj['team'])]) and
                 0 <= seconds - obj.get('when_shot', -10000) <= 5):
             edges.append((obj['id'], target['id']))
     points = {key: alive[key]['pos'] for edge in edges for key in edge if 'pos' in alive[key]}
@@ -110,7 +140,7 @@ def sample(text):
                 damaged_combat_ships=sum(o['health'] < o['maximum'] - .01 for o in ships),
                 active_firing_ships=len({a for a, _ in edges if alive[a]['kind'] == 'wingman'}),
                 active_battle_clusters=len(clusters),
-                weapon_instances=len(re.findall(r'^Weapon ', text, re.M)))
+                weapon_instances=len(re.findall(r'^Weapon ', text, re.M)), **scope)
 
 
 class RunMetrics:
@@ -126,8 +156,15 @@ class RunMetrics:
         self.peak_combat_ships = 0
         self.peak_battle_clusters = 0
         self.gaps = 0
+        self._scope = None
 
     def add(self, current):
+        scope = _metric_scope(current.get('player_teams'), current.get('player_alliances'))
+        for field in ('fleet_scope', 'combat_scope'):
+            if field in current and current[field] != scope[field]:
+                raise EvidenceError(f'inconsistent metric scope field: {field}')
+        if self._scope is not None and scope != self._scope:
+            raise EvidenceError('metric scope changed within run')
         criteria = self.criteria
         now = current['simulation_seconds']
         if self.previous is None:
@@ -154,6 +191,7 @@ class RunMetrics:
         self.samples += 1
         self.peak_combat_ships = max(self.peak_combat_ships, current['combat_ships'])
         self.peak_battle_clusters = max(self.peak_battle_clusters, current['active_battle_clusters'])
+        self._scope = scope
         self.previous = current
 
     def summary(self):
@@ -161,6 +199,8 @@ class RunMetrics:
         conditions = dict(duration=self.observed_seconds >= criteria.min_simulation_seconds,
                           sustained_fleet=self.longest_fleet_seconds >= criteria.min_fleet_seconds,
                           parallel_combat=self.parallel_combat_seconds >= criteria.min_parallel_seconds)
+        scope = (_metric_scope(self._scope['player_teams'], self._scope['player_alliances'])
+                 if self._scope is not None else _metric_scope())
         return dict(passed=self.samples >= 2 and all(conditions.values()), conditions=conditions,
                     criteria=asdict(criteria), pairs=self.samples,
                     first_simulation_seconds=self.first_seconds,
@@ -170,23 +210,93 @@ class RunMetrics:
                     longest_fleet_seconds=self.longest_fleet_seconds,
                     parallel_combat_seconds=self.parallel_combat_seconds,
                     peak_combat_ships=self.peak_combat_ships,
-                    peak_battle_clusters=self.peak_battle_clusters)
+                    peak_battle_clusters=self.peak_battle_clusters, **scope)
 
 
-def verified_samples(run):
-    names = {p.name for p in (run / 'A').glob('step_*.txt')} & {p.name for p in (run / 'B').glob('step_*.txt')}
-    names = [name for name in names if STEP.fullmatch(name)]
-    for name in sorted(names, key=lambda value: int(STEP.fullmatch(value)[1])):
-        step = int(STEP.fullmatch(name)[1])
-        texts = [(run / tag / name).read_text(encoding='latin1') for tag in ('A', 'B')]
-        normalized = [[LOCAL.sub('', line) for line in text.splitlines()] for text in texts]
-        for lines in normalized:
-            if (len(lines) < 3 or not re.fullmatch(rf'step {step} synced_rng [0-9a-fA-F]+ table_index \d+', lines[0])
-                    or lines[-1] != f'END step {step}'):
-                raise EvidenceError(f'{name}: incomplete or invalid dump')
-        if normalized[0] != normalized[1]:
-            raise EvidenceError(f'{name}: peer state diverged', 1)
-        yield sample('\n'.join(texts[0].splitlines()) + '\n')
+def _peer_list(value):
+    if (not isinstance(value, (list, tuple)) or not 2 <= len(value) <= 8 or
+            any(not isinstance(tag, str) or not re.fullmatch(r'[A-H]', tag) for tag in value) or
+            len(set(value)) != len(value)):
+        raise EvidenceError('peers must contain 2..8 unique tags from A through H')
+    return list(value)
+
+
+def resolve_peers(run, peers=None):
+    explicit = _peer_list(peers) if peers is not None else None
+    manifest = Path(run) / 'launch.json'
+    if not manifest.exists():
+        return explicit if explicit is not None else ['A', 'B']
+    try:
+        launch = json.loads(manifest.read_text(encoding='utf-8-sig'))
+    except (OSError, ValueError) as error:
+        raise EvidenceError(f'cannot read launch.json: {error}') from error
+    if not isinstance(launch, dict):
+        raise EvidenceError('launch.json must contain an object')
+    declared = _peer_list(launch['peers']) if 'peers' in launch else ['A', 'B']
+    if explicit is not None and explicit != declared:
+        raise EvidenceError(f'--peers conflicts with launch.json peers: {declared}')
+    return declared
+
+
+def shared_steps(run, peers=None):
+    run = Path(run)
+    peers = resolve_peers(run, peers)
+    names = None
+    for tag in peers:
+        directory = run / tag
+        if not directory.is_dir():
+            raise EvidenceError(f'required peer {tag} capture directory is missing')
+        current = {path.name for path in directory.glob('step_*.txt') if STEP.fullmatch(path.name)}
+        names = current if names is None else names & current
+    return names
+
+
+def _scope_from_launch(run):
+    manifest = Path(run) / 'launch.json'
+    if not manifest.exists():
+        return _metric_scope()
+    try:
+        launch = json.loads(manifest.read_text(encoding='utf-8-sig'))
+    except (OSError, ValueError) as error:
+        raise EvidenceError(f'cannot read launch.json: {error}') from error
+    if not isinstance(launch, dict):
+        raise EvidenceError('launch.json must contain an object')
+    for field in ('player_teams', 'player_alliances'):
+        if field in launch and launch[field] is None:
+            raise EvidenceError(f'{field} must not be null')
+    return _metric_scope(launch.get('player_teams'), launch.get('player_alliances'))
+
+
+def compare_step(run, name, peers=None):
+    run = Path(run)
+    peers = resolve_peers(run, peers)
+    scope = _scope_from_launch(run)
+    match = STEP.fullmatch(name)
+    if not match:
+        raise EvidenceError('invalid step filename')
+    step = int(match[1])
+    captures = {}
+    for tag in peers:
+        try:
+            lines = (run / tag / name).read_text(encoding='latin1').splitlines()
+        except OSError as error:
+            raise EvidenceError(f'{name}: required peer {tag} capture unavailable: {error}') from error
+        if (len(lines) < 3 or not re.fullmatch(rf'step {step} synced_rng [0-9a-fA-F]+ table_index \d+', lines[0])
+                or lines[-1] != f'END step {step}'):
+            raise EvidenceError(f'{name}: peer {tag} incomplete or invalid dump')
+        captures[tag] = lines
+    reference = [LOCAL.sub('', line) for line in captures[peers[0]]]
+    for tag in peers[1:]:
+        if [LOCAL.sub('', line) for line in captures[tag]] != reference:
+            raise EvidenceError(f'{name}: peer {tag} state diverged from {peers[0]}', 1)
+    current = sample('\n'.join(captures[peers[0]]) + '\n', scope['player_teams'], scope['player_alliances'])
+    return dict(current, peers=peers, peer_count=len(peers))
+
+
+def verified_samples(run, peers=None):
+    peers = resolve_peers(run, peers)
+    for name in sorted(shared_steps(run, peers), key=lambda value: int(STEP.fullmatch(value)[1])):
+        yield compare_step(run, name, peers)
 
 
 def main(argv=None):
@@ -194,14 +304,17 @@ def main(argv=None):
     parser.add_argument('run', type=Path)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--timeline', type=Path)
+    parser.add_argument('--peers', nargs='+', metavar='TAG', help='required peer tags; must match launch.json when present')
     defaults = Criteria()
     for field, value in asdict(defaults).items():
         parser.add_argument('--' + field.replace('_', '-'), type=type(value), default=value)
     args = parser.parse_args(argv)
     outputs = [path.resolve() for path in (args.output, args.timeline) if path]
-    captures = [(args.run / tag).resolve() for tag in ('A', 'B')]
+    captures = [(args.run / tag).resolve() for tag in 'ABCDEFGH']
     if any(folder == path or folder in path.parents for path in outputs for folder in captures):
         parser.error('output paths must be outside peer capture directories')
+    if (args.run / 'launch.json').resolve() in outputs:
+        parser.error('output paths must preserve launch.json')
     if len(outputs) != len(set(outputs)):
         parser.error('summary and timeline need distinct output paths')
     criteria = Criteria(**{key: getattr(args, key) for key in asdict(defaults)})
@@ -212,10 +325,12 @@ def main(argv=None):
     timeline = None
     failure = None
     exit_code = 2
+    peers = []
     try:
+        peers = resolve_peers(args.run, args.peers)
         if args.timeline:
             timeline = args.timeline.open('w', encoding='utf-8')
-        for current in verified_samples(args.run):
+        for current in verified_samples(args.run, peers):
             metrics.add(current)
             if timeline:
                 timeline.write(json.dumps(current, sort_keys=True) + '\n')
@@ -227,6 +342,7 @@ def main(argv=None):
         if timeline:
             timeline.close()
     result = metrics.summary()
+    result.update(peers=peers, peer_count=len(peers))
     if failure:
         result['passed'], result['error'] = False, failure
     rendered = json.dumps(result, indent=2, sort_keys=True) + '\n'
