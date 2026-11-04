@@ -135,6 +135,13 @@ At the first out-of-sync error the game writes a state dump to
 and torpedo). Compare the dumps of two PCs with `diff`; the first different line names the
 object that drifted. Please open an issue with both files.
 
+## Local test Window positions
+
+Local test-client Window positions persist in `work/game_window_positions.json`.
+After arranging the clients, run `python tools/game_window_positions.py save <run> A B C D E F`.
+The test launchers restore each saved position at startup and after world rendering starts,
+without changing Window size, Z-Order or desktop Focus. The profile is local and is not shipped.
+
 ## Files
 
 - `release/armada_fix.py` – the patcher (Python 3, no dependencies, includes the proxy DLL)

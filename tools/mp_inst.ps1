@@ -19,4 +19,6 @@ $id = & 'E:\dev\starmada\.venv\Scripts\python.exe' 'E:\dev\starmada\tools\start_
 if ($LASTEXITCODE -ne 0 -or "$id" -notmatch '^\d+$') { throw 'Game process failed to start.' }
 $id | Out-File -Encoding ascii "E:\dev\starmada\work\pid_$Tag.txt"
 $id | Out-File -Encoding ascii "E:\dev\starmada\work\det\$Run\pid_$Tag.txt"
+& 'E:\dev\starmada\.venv\Scripts\python.exe' (Join-Path $PSScriptRoot 'game_window_positions.py') restore $Run $Tag --timeout 20 --executable "$GameDir\Armada.exe"
+if ($LASTEXITCODE -ne 0) { throw "Window position restore failed for client $Tag." }
 "$Tag pid $id"

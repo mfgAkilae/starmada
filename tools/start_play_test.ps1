@@ -49,6 +49,8 @@ try {
     foreach ($tag in @('A','B')) {
         & $py (Join-Path $PSScriptRoot 'test_window_render.py') $Run $tag --live-only
         if ($LASTEXITCODE -ne 0) { throw "Native-window rendering failed on client $tag." }
+        & $py (Join-Path $PSScriptRoot 'game_window_positions.py') restore $Run $tag
+        if ($LASTEXITCODE -ne 0) { throw "Window position restore failed on client $tag." }
     }
 } catch {
     foreach ($tag in @('A','B')) {
