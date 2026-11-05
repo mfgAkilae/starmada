@@ -94,5 +94,24 @@ only beside the probe executable, with its upstream asset digest verified.
 It also failed initialization (`VK_ERROR_INITIALIZATION_FAILED` beneath the
 Direct3D error), including with implicit Vulkan Layers disabled just for the
 probe Processes. No Game installation received this backend. The startup problem
-therefore remains a blocker for a new real six-player test; a Windows restart is
-the next system-state comparison, not a proven fix.
+therefore remains a blocker for a new real six-player test. These experiments
+did not establish its root cause, or that a Windows restart is necessary or sufficient.
+
+## Actual retry without restart, 2026-11-05
+
+At the user's request, `agents6_8` repeated the complete six-client launch with
+v1.3.1, without restarting Windows or changing global graphics settings. All six
+Human clients joined the configured stock lobby, with no Native Player AI.
+A/F created D3D9 successfully and each passed the live 640x480 renderer/canvas
+check. B/C/D/E returned `D3DERR_NOTAVAILABLE` (`8876086a`), which the GOG wrapper
+mapped to `DDERR_UNSUPPORTEDMODE`; they then crashed at `Armada.exe+18207e`.
+
+All six used the same v1.3.1 test proxy. Seven live Guards were sampled on A/B/C
+before launch and A/F after initialization. Windows audio pre-mute returned S_OK
+on all six; direct GetMute checks on the sampled clients returned true. The scoped
+watchdog recorded no mouse/focus alert. Four fresh minidumps were retained locally.
+
+No complete six-peer World or simulation capture was produced, so no Game
+Controller or Late-Game Observer was started. This is another initialization
+failure, not a gameplay or OOS result. The two surviving owned test clients were
+closed after evidence capture. [Compact result](validation/agents6_8_startup.json).

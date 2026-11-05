@@ -1,0 +1,151 @@
+{
+  "schema": 1,
+  "run": "agents6_8",
+  "date_utc": "2026-11-05T02:08:29.038016+00:00",
+  "version": "1.3.1",
+  "os_restarted": false,
+  "result": "failed_during_renderer_initialization",
+  "lobby": {
+    "connected_human_clients": 6,
+    "native_ai": 0,
+    "standard_units": true,
+    "standard_tech": true,
+    "map": "6violins.bzn"
+  },
+  "peers": {
+    "A": {
+      "create_device_hresult": "00000000",
+      "created_d3d9_device": true,
+      "matching_window_and_caller_thread": true,
+      "client_size": [
+        640,
+        480
+      ],
+      "windowed_requested": true,
+      "proxy_sha256": "169c3685a4bfc89b7677e997940d9ebbd896bd019ad4e7b9789b940a734141a7",
+      "windows_mute_initialization_s_ok": true,
+      "seven_guards_observed": true,
+      "mixer_get_mute_observed": [
+        true
+      ],
+      "simulation_captures": 0,
+      "live_renderer_canvas_check_passed": true
+    },
+    "B": {
+      "create_device_hresult": "8876086a",
+      "created_d3d9_device": false,
+      "matching_window_and_caller_thread": true,
+      "client_size": [
+        640,
+        480
+      ],
+      "windowed_requested": true,
+      "proxy_sha256": "169c3685a4bfc89b7677e997940d9ebbd896bd019ad4e7b9789b940a734141a7",
+      "windows_mute_initialization_s_ok": true,
+      "seven_guards_observed": true,
+      "mixer_get_mute_observed": [
+        true
+      ],
+      "simulation_captures": 0
+    },
+    "C": {
+      "create_device_hresult": "8876086a",
+      "created_d3d9_device": false,
+      "matching_window_and_caller_thread": true,
+      "client_size": [
+        640,
+        480
+      ],
+      "windowed_requested": true,
+      "proxy_sha256": "169c3685a4bfc89b7677e997940d9ebbd896bd019ad4e7b9789b940a734141a7",
+      "windows_mute_initialization_s_ok": true,
+      "seven_guards_observed": true,
+      "mixer_get_mute_observed": [
+        true
+      ],
+      "simulation_captures": 0
+    },
+    "D": {
+      "create_device_hresult": "8876086a",
+      "created_d3d9_device": false,
+      "matching_window_and_caller_thread": true,
+      "client_size": [
+        640,
+        480
+      ],
+      "windowed_requested": true,
+      "proxy_sha256": "169c3685a4bfc89b7677e997940d9ebbd896bd019ad4e7b9789b940a734141a7",
+      "windows_mute_initialization_s_ok": true,
+      "seven_guards_observed": null,
+      "mixer_get_mute_observed": null,
+      "simulation_captures": 0
+    },
+    "E": {
+      "create_device_hresult": "8876086a",
+      "created_d3d9_device": false,
+      "matching_window_and_caller_thread": true,
+      "client_size": [
+        640,
+        480
+      ],
+      "windowed_requested": true,
+      "proxy_sha256": "169c3685a4bfc89b7677e997940d9ebbd896bd019ad4e7b9789b940a734141a7",
+      "windows_mute_initialization_s_ok": true,
+      "seven_guards_observed": null,
+      "mixer_get_mute_observed": null,
+      "simulation_captures": 0
+    },
+    "F": {
+      "create_device_hresult": "00000000",
+      "created_d3d9_device": true,
+      "matching_window_and_caller_thread": true,
+      "client_size": [
+        640,
+        480
+      ],
+      "windowed_requested": true,
+      "proxy_sha256": "169c3685a4bfc89b7677e997940d9ebbd896bd019ad4e7b9789b940a734141a7",
+      "windows_mute_initialization_s_ok": true,
+      "seven_guards_observed": true,
+      "mixer_get_mute_observed": [
+        true
+      ],
+      "simulation_captures": 0,
+      "live_renderer_canvas_check_passed": true
+    }
+  },
+  "startup_crash_dumps_retained_locally": 4,
+  "mouse_focus_watchdog_alert": false,
+  "game_controllers_launched": 0,
+  "observer_started": false,
+  "six_player_late_game_gate_passed": false,
+  "failure": "Client B exited during initialization.",
+  "limits": [
+    "No complete six-peer World initialized",
+    "No new gameplay or OOS comparison",
+    "No claim that restart is necessary or sufficient; no restart performed"
+  ],
+  "recorded_crashes": {
+    "B": {
+      "exception_code": "0xc0000005",
+      "module": "Armada.exe",
+      "rva": "0x18207e"
+    },
+    "C": {
+      "exception_code": "0xc0000005",
+      "module": "Armada.exe",
+      "rva": "0x18207e"
+    },
+    "D": {
+      "exception_code": "0xc0000005",
+      "module": "Armada.exe",
+      "rva": "0x18207e"
+    },
+    "E": {
+      "exception_code": "0xc0000005",
+      "module": "Armada.exe",
+      "rva": "0x18207e"
+    }
+  },
+  "owned_test_clients_closed_after_capture": true
+}
